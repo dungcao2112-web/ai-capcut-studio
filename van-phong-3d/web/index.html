@@ -139,7 +139,8 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
-  <script src="/character3d.js?v=5"></script>
+  <script src="/mocap-gait.js?v=8"></script>
+  <script src="/character3d.js?v=8"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@500;600;700;800&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
@@ -3150,7 +3151,7 @@
       // BÉ MAI 3D THẬT: D:\Blend\Mai\Little Kid1.dae -> /models/mai.glb (play / walk / stand / sit)
       if (CharRig && typeof THREE.GLTFLoader !== 'undefined') {
         new THREE.GLTFLoader().load(
-          '/models/mai.glb?v=5',
+          '/models/mai.glb?v=8',
           (gltf) => {
             const fa = familyActors.find((a) => a.id === 'be_mai');
             if (!fa) return;
@@ -5620,7 +5621,7 @@
       freyaLoadingStarted = true;
       const gltfLoader = new THREE.GLTFLoader();
       gltfLoader.load(
-        '/models/freya.glb?v=5',
+        '/models/freya.glb?v=8',
         (gltf) => {
           freyaTemplateScene = gltf.scene;
           Object.keys(agentMeshes).forEach((id) => {
@@ -5643,7 +5644,7 @@
     // 'sit_work' (ngồi gõ phím), 'sit_relax' (ngồi nghỉ ở Pantry), 'walk' (đi chậm), 'stand' (đứng xem)
     // =========================================================================
     const CLAUDE_MODEL = {
-      url: '/models/claude.glb?v=5',
+      url: '/models/claude.glb?v=8',
       scale: 0.70,
       sitOffset: [0, 0.015 - 0.7753 * 0.70, -0.115],
       standOffset: [0, -0.34, 0],
@@ -5735,7 +5736,7 @@
         }
         const p = m.curWorldPos || [0, 0, 0];
         const v = CharRig.measureSpeed(m, p[0], p[2], dt);
-        m.rig.update(Math.min(dt || 0, 0.1), { speed: clip === 'walk' ? v : 0 });
+        m.rig.update(Math.min(dt || 0, 0.1), { speed: clip === 'walk' ? v : 0, lookYaw: m.lookYaw || 0, turnRate: m.turnRate || 0 });
       } else if (m.claudeClip !== clip && m.claudeActions[clip]) {
         const next = m.claudeActions[clip];
         const prev = m.claudeActions[m.claudeClip];
@@ -5806,7 +5807,7 @@
     // Nếu tải lỗi -> tự động quay về dùng Freya như cũ.
     // =========================================================================
     const NHANSU_MODEL = {
-      url: '/models/nhan_su.glb?v=5',
+      url: '/models/nhan_su.glb?v=8',
       scale: 0.68,
       sitOffset: [0, 0.015 - 0.936 * 0.68, -0.115],
       standOffset: [0, -0.34, 0],
@@ -6033,11 +6034,11 @@
 
     const VIP_WALKERS = {
       chairman: {
-        id: 'chairman', url: '/models/sep_dung.glb?v=5', homeSeat: 'chairman_desk', benchSeat: 'bench_chairman',
+        id: 'chairman', url: '/models/sep_dung.glb?v=8', homeSeat: 'chairman_desk', benchSeat: 'bench_chairman',
         clips: { sit: 'sit_desk', walk: 'walk', stand: 'stand' }, walkTimeScale: 1.0, strideSpeed: 0.75
       },
       me_win: {
-        id: 'me_win', url: '/models/me_win.glb?v=5', homeSeat: 'me_win_sofa', benchSeat: 'bench_me_win',
+        id: 'me_win', url: '/models/me_win.glb?v=8', homeSeat: 'me_win_sofa', benchSeat: 'bench_me_win',
         clips: { sit: 'sit_read', walk: 'walk', stand: 'stand' }, walkTimeScale: 0.87, strideSpeed: 0.75 / 0.87
       }
     };
@@ -6201,10 +6202,15 @@
             w.x += (dx / dist) * remaining;
             w.z += (dz / dist) * remaining;
             remaining = 0;
-            let dyaw = Math.atan2(dx, dz) - w.yaw;
-            while (dyaw > Math.PI) dyaw -= Math.PI * 2;
-            while (dyaw < -Math.PI) dyaw += Math.PI * 2;
-            w.yaw += dyaw * Math.min(1, dt * 9);
+            if (CharRig) {
+              const ty = CharRig.stepYaw(w.yaw, Math.atan2(dx, dz), dt, 7, 3.2);
+              w.yaw = ty.yaw; w.turnRate = ty.turnRate; w.lookYaw = ty.lookYaw;
+            } else {
+              let dyaw = Math.atan2(dx, dz) - w.yaw;
+              while (dyaw > Math.PI) dyaw -= Math.PI * 2;
+              while (dyaw < -Math.PI) dyaw += Math.PI * 2;
+              w.yaw += dyaw * Math.min(1, dt * 9);
+            }
           }
         }
         w.y += (vipFloorY(w.x, w.z) - w.y) * Math.min(1, dt * 8);
@@ -6234,10 +6240,15 @@
           w.y += (vipFloorY(w.x, w.z) - w.y) * Math.min(1, dt * 8);
           vipPlayClip(w, 'stand');
         }
-        let dyaw = targetYaw - w.yaw;
-        while (dyaw > Math.PI) dyaw -= Math.PI * 2;
-        while (dyaw < -Math.PI) dyaw += Math.PI * 2;
-        w.yaw += dyaw * Math.min(1, dt * 5);
+        if (CharRig) {
+          const ty = CharRig.stepYaw(w.yaw, targetYaw, dt, 5, 2.4);
+          w.yaw = ty.yaw; w.turnRate = ty.turnRate; w.lookYaw = ty.lookYaw;
+        } else {
+          let dyaw = targetYaw - w.yaw;
+          while (dyaw > Math.PI) dyaw -= Math.PI * 2;
+          while (dyaw < -Math.PI) dyaw += Math.PI * 2;
+          w.yaw += dyaw * Math.min(1, dt * 5);
+        }
 
         if (w.taskEndAt === null) w.taskEndAt = t + w.task.dur;
         if (t >= w.taskEndAt) {
@@ -6249,7 +6260,7 @@
       vipApplyTransform(w);
       if (w.rig) {
         const v = CharRig.measureSpeed(w, w.x, w.z, dt);
-        w.rig.update(dt, { speed: w.mode === 'walk' ? v : 0 });
+        w.rig.update(dt, { speed: w.mode === 'walk' ? v : 0, lookYaw: w.lookYaw || 0, turnRate: w.turnRate || 0 });
       } else {
         w.mixer.update(dt);
       }
@@ -6473,10 +6484,16 @@
           m.curWorldPos[1] = 0.36; // Đứng thẳng khi đang đi bộ
           // Xoay mặt mượt theo hướng bước đi
           const moveYaw = Math.atan2(dx, dz);
-          let diffYaw = moveYaw - m.charGroup.rotation.y;
-          while (diffYaw > Math.PI) diffYaw -= Math.PI * 2;
-          while (diffYaw < -Math.PI) diffYaw += Math.PI * 2;
-          m.charGroup.rotation.y += diffYaw * 0.22;
+          if (CharRig) {
+            // Vào cua mượt, độc lập FPS: giới hạn tốc độ xoay + đầu nhìn trước hướng rẽ + nghiêng người theo cua
+            const ty = CharRig.stepYaw(m.charGroup.rotation.y, moveYaw, Math.min(dt, 0.08), 7, 3.2);
+            m.charGroup.rotation.y = ty.yaw; m.turnRate = ty.turnRate; m.lookYaw = ty.lookYaw;
+          } else {
+            let diffYaw = moveYaw - m.charGroup.rotation.y;
+            while (diffYaw > Math.PI) diffYaw -= Math.PI * 2;
+            while (diffYaw < -Math.PI) diffYaw += Math.PI * 2;
+            m.charGroup.rotation.y += diffYaw * 0.22;
+          }
         } else {
           m.curWorldPos[0] = nextWp[0];
           m.curWorldPos[1] = nextWp[1];
@@ -6517,10 +6534,15 @@
       } else {
         m.isWalkingFlag = false;
         // Đã tới đích của chặng hiện tại: xoay người mượt về hướng quan sát / màn hình PC
-        let diffYaw = desiredLookRotY - m.charGroup.rotation.y;
-        while (diffYaw > Math.PI) diffYaw -= Math.PI * 2;
-        while (diffYaw < -Math.PI) diffYaw += Math.PI * 2;
-        m.charGroup.rotation.y += diffYaw * 0.18;
+        if (CharRig) {
+          const ty = CharRig.stepYaw(m.charGroup.rotation.y, desiredLookRotY, Math.min(dt, 0.08), 6, 2.6);
+          m.charGroup.rotation.y = ty.yaw; m.turnRate = ty.turnRate; m.lookYaw = ty.lookYaw;
+        } else {
+          let diffYaw = desiredLookRotY - m.charGroup.rotation.y;
+          while (diffYaw > Math.PI) diffYaw -= Math.PI * 2;
+          while (diffYaw < -Math.PI) diffYaw += Math.PI * 2;
+          m.charGroup.rotation.y += diffYaw * 0.18;
+        }
 
         if (desiredMode === 'desk_idea') {
           // Ngồi tại bàn làm việc của mình & suy nghĩ đưa ra ý tưởng cải tiến công việc!
@@ -7545,18 +7567,28 @@
             fa.curWorldPos[2] += (dz / dist) * step;
             fa.curWorldPos[1] = targetPos[1];
             const moveYaw = Math.atan2(dx, dz);
-            let dyaw = moveYaw - fa.charGroup.rotation.y;
-            while (dyaw > Math.PI) dyaw -= Math.PI * 2;
-            while (dyaw < -Math.PI) dyaw += Math.PI * 2;
-            fa.charGroup.rotation.y += dyaw * 0.25;
+            if (CharRig) {
+              const ty = CharRig.stepYaw(fa.charGroup.rotation.y, moveYaw, dt, 8, 3.6);
+              fa.charGroup.rotation.y = ty.yaw; fa.turnRate = ty.turnRate; fa.lookYaw = ty.lookYaw;
+            } else {
+              let dyaw = moveYaw - fa.charGroup.rotation.y;
+              while (dyaw > Math.PI) dyaw -= Math.PI * 2;
+              while (dyaw < -Math.PI) dyaw += Math.PI * 2;
+              fa.charGroup.rotation.y += dyaw * 0.25;
+            }
           } else {
             fa.curWorldPos[0] = targetPos[0];
             fa.curWorldPos[1] = targetPos[1];
             fa.curWorldPos[2] = targetPos[2];
-            let dyaw = lookYaw - fa.charGroup.rotation.y;
-            while (dyaw > Math.PI) dyaw -= Math.PI * 2;
-            while (dyaw < -Math.PI) dyaw += Math.PI * 2;
-            fa.charGroup.rotation.y += dyaw * 0.2;
+            if (CharRig) {
+              const ty = CharRig.stepYaw(fa.charGroup.rotation.y, lookYaw, dt, 6, 2.8);
+              fa.charGroup.rotation.y = ty.yaw; fa.turnRate = ty.turnRate; fa.lookYaw = ty.lookYaw;
+            } else {
+              let dyaw = lookYaw - fa.charGroup.rotation.y;
+              while (dyaw > Math.PI) dyaw -= Math.PI * 2;
+              while (dyaw < -Math.PI) dyaw += Math.PI * 2;
+              fa.charGroup.rotation.y += dyaw * 0.2;
+            }
           }
 
           const lx = fa.curWorldPos[0] - basePos[0];
@@ -7567,7 +7599,7 @@
           if (fa.rig) {
             // walk khi đang bước, play ở khu vui chơi, stand (vẫy chào) khi sang phòng Ba Dũng — crossFade 0.28s
             fa.rig.setPose(bmWalking ? 'walk' : (bmPhase >= 540.0 ? 'stand' : 'play'));
-            const r = fa.rig.update(dt, { speed: bmWalking ? bmSpeed : 0 });
+            const r = fa.rig.update(dt, { speed: bmWalking ? bmSpeed : 0, lookYaw: fa.lookYaw || 0, turnRate: fa.turnRate || 0 });
             fa.charGroup.position.set(lx, ly + r.bobY, lz);
           } else if (bmWalking) {
             fa.charGroup.position.set(lx, ly + Math.abs(Math.sin(t * 4.5)) * 0.04, lz);
