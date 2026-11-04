@@ -139,6 +139,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+  <script src="/character3d.js?v=5"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@500;600;700;800&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
@@ -1112,6 +1113,8 @@
     // =========================================================================
     // 1. KHỞI TẠO KHÔNG GIAN 3D ISOMETRIC STUDIO CHIA PHÒNG BAN RÕ RÀNG
     // =========================================================================
+    // Bộ điều khiển khung xương 3D & dáng đi cơ sinh học (web/character3d.js) — null nếu file chưa tải
+    const CharRig = window.Character3DRigController || null;
     const container = document.getElementById('canvas-container');
     const labelsLayer = document.getElementById('labels-layer');
 
@@ -3139,8 +3142,34 @@
         labelEl,
         curWorldPos: [-11.2, 0.38, -8.4],
         waypoints: [],
-        targetKey: ''
+        targetKey: '',
+        // Fallback chibi procedural (dùng tới khi /models/mai.glb tải xong, hoặc mãi mãi nếu thiếu file)
+        rig: CharRig ? CharRig.createProcedural({ leftLeg, rightLeg, leftArm, rightArm, head }, { stepLength: 0.16 }) : null
       });
+
+      // BÉ MAI 3D THẬT: D:\Blend\Mai\Little Kid1.dae -> /models/mai.glb (play / walk / stand / sit)
+      if (CharRig && typeof THREE.GLTFLoader !== 'undefined') {
+        new THREE.GLTFLoader().load(
+          '/models/mai.glb?v=5',
+          (gltf) => {
+            const fa = familyActors.find((a) => a.id === 'be_mai');
+            if (!fa) return;
+            const model = gltf.scene;
+            model.scale.setScalar(0.56 / 0.78); // charGroup đã scale 0.78 -> tổng 0.56
+            model.position.y = -0.19;            // đế giày khớp đúng mặt sàn cũ của chibi
+            model.traverse((child) => {
+              if (child.isMesh || child.isSkinnedMesh) { child.frustumCulled = false; child.castShadow = true; child.receiveShadow = true; }
+            });
+            fa.charGroup.children.forEach((ch) => { if (ch !== fa.labelAnchor) ch.visible = false; });
+            fa.charGroup.add(model);
+            fa.maiModel = model;
+            fa.rig = CharRig.create(model, gltf.animations, { strideSpeed: 0.55 });
+            fa.rig.setPose('play');
+          },
+          undefined,
+          (err) => console.warn('Không tải được /models/mai.glb -> giữ Bé Mai chibi procedural:', err)
+        );
+      }
     })();
 
     // --- 3. CÚN CƯNG WIN (CORGI) chạy lon ton vẫy đuôi trong hành lang rộng của Phòng Sếp Dũng ---
@@ -5591,7 +5620,7 @@
       freyaLoadingStarted = true;
       const gltfLoader = new THREE.GLTFLoader();
       gltfLoader.load(
-        '/models/freya.glb',
+        '/models/freya.glb?v=5',
         (gltf) => {
           freyaTemplateScene = gltf.scene;
           Object.keys(agentMeshes).forEach((id) => {
@@ -5614,11 +5643,12 @@
     // 'sit_work' (ngồi gõ phím), 'sit_relax' (ngồi nghỉ ở Pantry), 'walk' (đi chậm), 'stand' (đứng xem)
     // =========================================================================
     const CLAUDE_MODEL = {
-      url: '/models/claude.glb?v=3',
+      url: '/models/claude.glb?v=5',
       scale: 0.70,
       sitOffset: [0, 0.015 - 0.7753 * 0.70, -0.115],
       standOffset: [0, -0.34, 0],
-      walkTimeScale: 0.83
+      walkTimeScale: 0.83,
+      strideSpeed: 0.75 / 0.83 // m/s ở timeScale = 1 -> walk.timeScale = v / strideSpeed (chống trượt chân)
     };
     let claudeTemplateGltf = null;
     let claudeModelFailed = false;
@@ -5685,6 +5715,7 @@
       m.claudeMixer = mixer;
       m.claudeActions = actions;
       m.claudeClip = '';
+      if (CharRig) m.rig = CharRig.create(root, null, { mixer, actions, strideSpeed: CLAUDE_MODEL.strideSpeed });
       syncClaudePose(m, 0);
     }
 
@@ -5694,7 +5725,18 @@
       const isSitting = m.leftLeg && m.leftLeg.rotation.x < -0.7;
       const clip = m.isWalkingFlag && !isSitting ? 'walk'
         : (isSitting ? (m.inTeaLounge ? 'sit_relax' : 'sit_work') : 'stand');
-      if (m.claudeClip !== clip && m.claudeActions[clip]) {
+      if (m.rig) {
+        // Character3DRigController: crossFade 0.28s + khóa nhịp bước theo vận tốc thật + hậu xử lý khung xương
+        if (m.rigPose !== clip) {
+          m.rigPose = clip;
+          m.rig.setPose(clip);
+          m.claudeClip = m.rig.clip;
+          m.claudeRoot.position.set(...(isSitting ? cfg.sitOffset : cfg.standOffset));
+        }
+        const p = m.curWorldPos || [0, 0, 0];
+        const v = CharRig.measureSpeed(m, p[0], p[2], dt);
+        m.rig.update(Math.min(dt || 0, 0.1), { speed: clip === 'walk' ? v : 0 });
+      } else if (m.claudeClip !== clip && m.claudeActions[clip]) {
         const next = m.claudeActions[clip];
         const prev = m.claudeActions[m.claudeClip];
         next.reset();
@@ -5704,7 +5746,7 @@
         m.claudeClip = clip;
         m.claudeRoot.position.set(...(isSitting ? cfg.sitOffset : cfg.standOffset));
       }
-      m.claudeMixer.update(Math.min(dt || 0, 0.1));
+      if (!m.rig) m.claudeMixer.update(Math.min(dt || 0, 0.1));
 
       // Phụ kiện (mũ beret, tai nghe, tách trà) bám theo xương đầu / tay phải, đặt trong không gian charGroup
       if (m.boneFollowers && m.boneFollowers.length) {
@@ -5764,11 +5806,12 @@
     // Nếu tải lỗi -> tự động quay về dùng Freya như cũ.
     // =========================================================================
     const NHANSU_MODEL = {
-      url: '/models/nhan_su.glb?v=3',
+      url: '/models/nhan_su.glb?v=5',
       scale: 0.68,
       sitOffset: [0, 0.015 - 0.936 * 0.68, -0.115],
       standOffset: [0, -0.34, 0],
-      walkTimeScale: 0.83
+      walkTimeScale: 0.83,
+      strideSpeed: 0.75 / 0.83
     };
     let nhanSuTemplateGltf = null;
     let nhanSuModelFailed = false;
@@ -5877,6 +5920,7 @@
       m.claudeMixer = mixer;
       m.claudeActions = actions;
       m.claudeClip = '';
+      if (CharRig) m.rig = CharRig.create(root, null, { mixer, actions, strideSpeed: NHANSU_MODEL.strideSpeed });
       syncClaudePose(m, 0);
       // Lệch pha để các nhân sự không cử động đồng loạt
       const cur = actions[m.claudeClip];
@@ -5989,12 +6033,12 @@
 
     const VIP_WALKERS = {
       chairman: {
-        id: 'chairman', url: '/models/sep_dung.glb?v=4', homeSeat: 'chairman_desk', benchSeat: 'bench_chairman',
-        clips: { sit: 'sit_desk', walk: 'walk', stand: 'stand' }, walkTimeScale: 1.0
+        id: 'chairman', url: '/models/sep_dung.glb?v=5', homeSeat: 'chairman_desk', benchSeat: 'bench_chairman',
+        clips: { sit: 'sit_desk', walk: 'walk', stand: 'stand' }, walkTimeScale: 1.0, strideSpeed: 0.75
       },
       me_win: {
-        id: 'me_win', url: '/models/me_win.glb?v=1', homeSeat: 'me_win_sofa', benchSeat: 'bench_me_win',
-        clips: { sit: 'sit_read', walk: 'walk', stand: 'stand' }, walkTimeScale: 0.87
+        id: 'me_win', url: '/models/me_win.glb?v=5', homeSeat: 'me_win_sofa', benchSeat: 'bench_me_win',
+        clips: { sit: 'sit_read', walk: 'walk', stand: 'stand' }, walkTimeScale: 0.87, strideSpeed: 0.75 / 0.87
       }
     };
 
@@ -6045,6 +6089,7 @@
         a.setLoop(THREE.LoopRepeat, Infinity);
         w.actions[clip.name] = a;
       });
+      if (CharRig) w.rig = CharRig.create(model, null, { mixer: w.mixer, actions: w.actions, clipNames: w.clips, strideSpeed: w.strideSpeed });
       const seat = VIP_SEATS[w.homeSeat];
       w.x = seat.pos[0]; w.z = seat.pos[1]; w.y = seat.y; w.yaw = seat.yaw;
       w.seatKey = w.homeSeat;
@@ -6061,6 +6106,10 @@
     }
 
     function vipPlayClip(w, kind) {
+      if (w.rig) {
+        if (w.rigPose !== kind) { w.rigPose = kind; w.rig.setPose(kind); w.clip = w.rig.clip; }
+        return;
+      }
       const name = w.clips[kind];
       if (w.clip === name || !w.actions[name]) return;
       const next = w.actions[name];
@@ -6198,7 +6247,12 @@
       }
 
       vipApplyTransform(w);
-      w.mixer.update(dt);
+      if (w.rig) {
+        const v = CharRig.measureSpeed(w, w.x, w.z, dt);
+        w.rig.update(dt, { speed: w.mode === 'walk' ? v : 0 });
+      } else {
+        w.mixer.update(dt);
+      }
     }
 
     function vipBubbleText(w) {
@@ -7480,7 +7534,9 @@
           const dx = targetPos[0] - fa.curWorldPos[0];
           const dz = targetPos[2] - fa.curWorldPos[2];
           const dist = Math.hypot(dx, dz);
-          const step = 1.75 * dt;
+          // Tốc độ đi của bé ~1.1 m/s (rig khóa nhịp bước: timeScale = v / 0.55)
+          const bmSpeed = fa.rig ? 1.1 : 1.75;
+          const step = bmSpeed * dt;
           let bmWalking = false;
 
           if (dist > step + 0.05) {
@@ -7506,16 +7562,22 @@
           const lx = fa.curWorldPos[0] - basePos[0];
           const ly = fa.curWorldPos[1] - basePos[1];
           const lz = fa.curWorldPos[2] - basePos[2];
-          fa.charGroup.position.set(lx, ly + Math.abs(Math.sin(t * 4.5)) * 0.04, lz);
           fa.hitbox.position.set(lx, ly + 0.7, lz);
 
-          if (bmWalking) {
+          if (fa.rig) {
+            // walk khi đang bước, play ở khu vui chơi, stand (vẫy chào) khi sang phòng Ba Dũng — crossFade 0.28s
+            fa.rig.setPose(bmWalking ? 'walk' : (bmPhase >= 540.0 ? 'stand' : 'play'));
+            const r = fa.rig.update(dt, { speed: bmWalking ? bmSpeed : 0 });
+            fa.charGroup.position.set(lx, ly + r.bobY, lz);
+          } else if (bmWalking) {
+            fa.charGroup.position.set(lx, ly + Math.abs(Math.sin(t * 4.5)) * 0.04, lz);
             const sw = Math.sin(t * 13.0);
             fa.leftLeg.rotation.x = sw * 0.6;
             fa.rightLeg.rotation.x = -sw * 0.6;
             fa.leftArm.rotation.z = -sw * 0.25;
             fa.rightArm.rotation.z = sw * 0.25;
           } else {
+            fa.charGroup.position.set(lx, ly + Math.abs(Math.sin(t * 4.5)) * 0.04, lz);
             fa.leftLeg.rotation.x = Math.sin(t * 4.5) * 0.15;
             fa.rightLeg.rotation.x = -Math.sin(t * 4.5) * 0.15;
             fa.head.rotation.z = Math.sin(t * 2.8) * 0.09;
