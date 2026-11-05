@@ -2293,12 +2293,19 @@ def parse_and_fetch_anh_nhac_list(
 ) -> dict[str, Any]:
     """Tự tìm & Gắn Hình Ảnh + áp dụng Mẫu ghép ảnh & Link nguồn đã chọn ở Bước 1 (services/auto_media.py)."""
     req = custom_request
+    forced_ai = False
+    try:
+        from services.auto_media import media_settings
+
+        proj_cfg = media_settings(read_json(project_dir / "project.json", {}) or {})
+    except Exception:
+        proj_cfg = {"links": [], "ai_with_sources": False}
+    if proj_cfg["links"] and proj_cfg.get("ai_with_sources", True) and not use_ai:
+        use_ai, forced_ai = True, True  # Có link nguồn => TỰ BẬT Agy CLI để đọc & tổng hợp thông tin theo mẫu
     if use_ai:
         try:  # Cho AI đọc thêm thông tin từ link nguồn sếp dán (nếu có)
-            from services.auto_media import media_settings
             from services.source_links import load_sources
 
-            proj_cfg = media_settings(read_json(project_dir / "project.json", {}) or {})
             if proj_cfg["links"]:
                 from services.source_info import ai_context
 
@@ -2312,6 +2319,19 @@ def parse_and_fetch_anh_nhac_list(
         except Exception:
             pass
     result = _parse_and_fetch_anh_nhac_list_core(project_dir, raw_text, current_title, use_ai, req)
+    if proj_cfg["links"] and not str(custom_request or "").strip():
+        # Mô tả sếp tự viết trong kịch bản luôn được giữ; AI chỉ điền cho mục chưa có mô tả (đánh dấu nguồn "ai")
+        script_entries = parse_script_outline(raw_text, current_title).get("entries", [])
+        for ent, it in zip(script_entries, (result.get("bang") or {}).get("items") or []):
+            if ent.get("bullets"):
+                it["bullets"] = list(ent["bullets"])
+                it["ghi_chu"] = " | ".join(ent["bullets"])
+            elif it.get("bullets") and use_ai:
+                it["bullets_from_sources"] = True
+                it["bullets_source"] = "ai"
+        write_json(project_dir / "text" / "bang.json", result.get("bang") or {})
+    result["ai_used"] = bool(use_ai)
+    result["ai_forced_by_sources"] = forced_ai
     try:
         from services.auto_media import apply_after_fetch
 

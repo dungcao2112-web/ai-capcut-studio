@@ -69,6 +69,20 @@
 
     if (body.some((ln) => BULLET.test(ln))) {
       base.format = "bullets";
+      // Có đánh số mục => dòng có số luôn là MỤC; dòng không số trước mục đầu tiên là tiêu đề phụ (giống Python)
+      const heads = body.map((l) => l.trim()).filter((t) => t && !BULLET.test(t));
+      if (heads.some((h) => NUMBERED.test(h))) {
+        const entries = [];
+        const subParts = [];
+        for (const ln of body) {
+          const t = ln.trim();
+          if (!t) continue;
+          if (BULLET.test(t)) { if (entries.length && cleanBullet(t)) entries[entries.length - 1].bullets.push(cleanBullet(t)); }
+          else if (NUMBERED.test(t) || entries.length) { if (cleanHeading(t)) entries.push({ heading: cleanHeading(t), bullets: [] }); }
+          else subParts.push(t);
+        }
+        return Object.assign(base, { entries, count: entries.length, subtitle: explicit || subParts.join(" | ") });
+      }
       if (explicit) base.subtitle = explicit;
       else if (!base.subtitle && blocks.length && blocks[0].length === 1 && looksLikeSubtitle(blocks[0][0])
         && base.entries.length && base.entries[0].heading === cleanHeading(blocks[0][0]) && !base.entries[0].bullets.length) {

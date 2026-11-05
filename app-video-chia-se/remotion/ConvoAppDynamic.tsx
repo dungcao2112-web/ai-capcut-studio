@@ -520,27 +520,50 @@ const GioDoItemCard: React.FC<{
     const manualTop = Number(cfg.productCardTop) > 0 && Number(cfg.productCardTop) < 420 ? Number(cfg.productCardTop) : 0;
     const baseTop = manualTop || (bullets.length >= 2 ? 172 : hasBullets ? 176 : 185);
     const effTop = manualTop ? baseTop : Math.max(baseTop, Math.round(estimateTitleBottom() + 14));
-    const nameFS = fitFont(nameText, nameBase, 912, { maxLines: 2, minSize: 38, charWidthEm: 0.46 });
-    const pillFS = isSingleBullet ? fitFont(withPin(bullets[0]), 33, 884, { maxLines: 2, minSize: 22, charWidthEm: 0.46 }) : 0;
-    const bulletFS = (b: string) => fitFont(`• ${b}`, bullets.length >= 3 ? 29 : 32, 872, { maxLines: 2, minSize: 20, charWidthEm: 0.46 });
-    const textBlockH =
-      (bullets.length >= 2 ? 18 : 28) +
-      estLines(nameText, nameFS, 912, 2) * nameFS * 1.06 +
-      (!hasBullets
-        ? 0
-        : isSingleBullet
-        ? 18 + estLines(bullets[0], pillFS, 884, 2) * pillFS * 1.22 + 30
-        : 10 + 34 + bullets.reduce((acc, b) => acc + estLines(b, bulletFS(b), 872, 2) * bulletFS(b) * 1.25 + 6, 0));
-    // Ảnh TO ĐỀU: cắt bỏ viền trong suốt (image_bbox) rồi phóng thẻ ảnh lấp đầy khoảng trống thật
-    // giữa tiêu đề và tên mục — vừa theo chiều rộng (≤ 900px × heroImageScale) lẫn chiều cao còn lại.
+    // CỠ ẢNH do sếp chỉnh ở Bước 3: cỡ ảnh chung (productImageSize, mặc định 400) × % từng mục (image_scale)
+    // × thẻ "Phóng to khung ảnh chính" (heroImageScale). Mặc định ảnh chiếm 86% khoảng trống để còn chỗ
+    // phóng to / thu nhỏ. Phóng to vượt khoảng trống => chữ tên mục & mô tả tự thu nhỏ (tối đa 28%) nhường chỗ.
     const bb = Array.isArray(item.image_bbox) && item.image_bbox.length === 4 && item.image_bbox[2] > 0 && item.image_bbox[3] > 0
       ? item.image_bbox.map(Number)
       : null;
     const frameInset = cfg.doctorCardFrame ? 24 : 0;
-    const maxBoxH = Math.max(260, 1080 - 24 - effTop - textBlockH - 8);
-    const maxBoxW = Math.min(1000, Math.round(900 * heroScale));
     const contentAspect = bb ? Number(item.image_aspect) || bb[2] / bb[3] : 1 / 0.72;
-    let heroFitPx = Math.min(maxBoxW, Math.round((maxBoxH - frameInset) * contentAspect) + frameInset);
+    const userScale = Math.max(0.4, Math.min(2.2,
+      ((Number(cfg.productImageSize) || 400) / 400) * (isNaN(itemScale) || itemScale <= 0 ? 1 : itemScale) * heroScale));
+    const measureText = (k: number) => {
+      const nFS = Math.round(fitFont(nameText, nameBase, 912, { maxLines: 2, minSize: 38, charWidthEm: 0.46 }) * k);
+      const pFS = isSingleBullet ? Math.round(fitFont(withPin(bullets[0]), 33, 884, { maxLines: 2, minSize: 22, charWidthEm: 0.46 }) * k) : 0;
+      const bFS = (b: string) => Math.round(fitFont(`• ${b}`, bullets.length >= 3 ? 29 : 32, 872, { maxLines: 2, minSize: 20, charWidthEm: 0.46 }) * k);
+      const h =
+        (bullets.length >= 2 ? 18 : 28) +
+        estLines(nameText, nFS, 912, 2) * nFS * 1.06 +
+        (!hasBullets
+          ? 0
+          : isSingleBullet
+          ? 18 + estLines(bullets[0], pFS, 884, 2) * pFS * 1.22 + 30
+          : 10 + 34 + bullets.reduce((acc, b) => acc + estLines(b, bFS(b), 872, 2) * bFS(b) * 1.25 + 6, 0));
+      return { nFS, pFS, bFS, h };
+    };
+    const fitFor = (textH: number) => {
+      const mH = Math.max(260, 1080 - 24 - effTop - textH - 8);
+      return { mH, fW: Math.min(1040, Math.round((mH - frameInset) * contentAspect) + frameInset) };
+    };
+    let txt = measureText(1);
+    let fit = fitFor(txt.h);
+    const wantW = Math.min(900, fit.fW) * 0.86 * userScale;
+    if (bb && wantW > fit.fW) {
+      const wantH = (wantW - frameInset) / contentAspect + frameInset;
+      const k = Math.max(0.72, 1 - (wantH - fit.mH) / Math.max(1, txt.h));
+      txt = measureText(k);
+      fit = fitFor(txt.h);
+    }
+    const nameFS = txt.nFS;
+    const pillFS = txt.pFS;
+    const bulletFS = txt.bFS;
+    const maxBoxH = fit.mH;
+    const fullW = fit.fW;
+    const maxBoxW = fullW;
+    let heroFitPx = Math.round(Math.max(240, Math.min(fullW, wantW)));
     if (!bb) heroFitPx = Math.max(300, Math.min(heroImgPx, Math.floor(maxBoxH / 0.72)));
     const heroBoxH = bb ? Math.round((heroFitPx - frameInset) / contentAspect) + frameInset : Math.round(heroFitPx * 0.72);
     const innerW = heroFitPx - frameInset;

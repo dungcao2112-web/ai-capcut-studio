@@ -155,20 +155,36 @@
     const top = drawTitle(ctx, H, st.title, st.subtitle, style) + (tall ? 40 : 14);
     // Đo khối chữ trước => ảnh lấp đầy phần còn lại (giống Remotion: không còn khoảng trống thừa)
     const nameTxt = `${item.i}. ${String(item.name || "").toLocaleUpperCase("vi")}`;
-    const nfit = fitText(ctx, nameTxt, BODY_FONT, "700", tall ? 92 : 70, 40, 940, 2);
-    const pillsH = drawPills(ctx, item.bullets || [], 0, style, tall ? 46 : 34, true);
-    const textH = (tall ? 44 : 20) + nfit.lines.length * nfit.size * 1.06 + (tall ? 26 : 14) + pillsH;
-    const scale = Math.max(0.8, Math.min(1.5, Number(style.heroImageScale) || 1));
+    // Cỡ ảnh giống Remotion: cỡ ảnh chung (Bước 3) × % từng mục × "Phóng to khung ảnh"; mặc định 86% khoảng trống,
+    // phóng to vượt khoảng trống => chữ thu nhỏ tối đa 28% để nhường chỗ
+    const userScale = Math.max(0.4, Math.min(2.2, ((Number(style.productImageSize) || 400) / 400)
+      * (Number(item.image_scale) > 0 ? Number(item.image_scale) : 1) * Math.max(0.8, Math.min(1.5, Number(style.heroImageScale) || 1))));
+    const bottom = tall ? 70 : 24;
+    const measure = (k) => {
+      const nfit = fitText(ctx, nameTxt, BODY_FONT, "700", Math.round((tall ? 92 : 70) * k), Math.round(40 * k), 940, 2);
+      const pillBase = Math.round((tall ? 46 : 34) * k);
+      const pillsH = drawPills(ctx, item.bullets || [], 0, style, pillBase, true);
+      return { nfit, pillBase, textH: (tall ? 44 : 20) + nfit.lines.length * nfit.size * 1.06 + (tall ? 26 : 14) + pillsH };
+    };
     const im = loadImage(item.image_url, redraw);
     const bb = im ? bboxOf(item.image_url) || { x: 0, y: 0, w: im.width, h: im.height } : null;
     const aspect = bb ? bb.w / bb.h : 4 / 3;
     const inset = style.doctorCardFrame ? 24 : 0;
-    const maxH = Math.max(240, H - (tall ? 70 : 24) - top - textH);
-    const maxW = Math.min(1000, 900 * scale);
-    const boxW = Math.min(maxW, (maxH - inset) * aspect + inset);
+    const fitFor = (textH) => { const maxH = Math.max(240, H - bottom - top - textH); return { maxH, fullW: Math.min(1040, (maxH - inset) * aspect + inset) }; };
+    let m = measure(1);
+    let f = fitFor(m.textH);
+    const wantW = Math.min(900, f.fullW) * 0.86 * userScale;
+    if (im && wantW > f.fullW) {
+      const k = Math.max(0.72, 1 - ((wantW - inset) / aspect + inset - f.maxH) / Math.max(1, m.textH));
+      m = measure(k);
+      f = fitFor(m.textH);
+    }
+    const nfit = m.nfit;
+    const textH = m.textH;
+    const boxW = Math.max(240, Math.min(f.fullW, wantW));
     const boxH = (boxW - inset) / aspect + inset;
     const cx = (W - boxW) / 2;
-    const y0 = top + Math.max(0, (H - (tall ? 70 : 24) - top - textH - boxH) / 2);
+    const y0 = top + Math.max(0, (H - bottom - top - textH - boxH) / 2);
     if (style.doctorCardFrame || !im) {
       roundRect(ctx, cx, y0, boxW, boxH, 40);
       ctx.fillStyle = style.cardColor || "#FFFDF9"; ctx.fill();
@@ -195,7 +211,7 @@
     const strokeW = Math.round(nfit.size * (style.nameStrokeBold ? 0.16 : 0.1));
     let y = drawStrokedLines(ctx, nfit.lines, nfit.size, W / 2, y0 + boxH + (tall ? 44 : 20),
       style.nameColor || (dark ? "#FFD54F" : "#8A4B12"), dark ? "#000" : "#FFFFFF", strokeW, 1.06);
-    return drawPills(ctx, item.bullets || [], y + (tall ? 26 : 14), style, tall ? 46 : 34);
+    return drawPills(ctx, item.bullets || [], y + (tall ? 26 : 14), style, m.pillBase);
   }
 
   window.LivePreviewRender = {

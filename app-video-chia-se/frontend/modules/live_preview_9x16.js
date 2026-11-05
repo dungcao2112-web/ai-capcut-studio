@@ -52,12 +52,16 @@
     const byIdx = new Map((srv.items || []).map((it) => [Number(it.i), it]));
     let items = (outline.entries || []).map((e, k) => {
       const match = byName.get(norm(e.heading)) || byIdx.get(k + 1) || {};
-      return { i: k + 1, name: e.heading, bullets: e.bullets && e.bullets.length ? e.bullets : (match.bullets || []), image_url: match.image_url || "" };
+      const domScale = Number(document.getElementById(`prodScaleInput_${k + 1}`)?.value); // % từng mục ở Bước 3
+      return { i: k + 1, name: e.heading, bullets: e.bullets && e.bullets.length ? e.bullets : (match.bullets || []), image_url: match.image_url || "",
+        image_scale: domScale > 10 ? domScale / 100 : Number(match.image_scale) || 1 };
     });
     if (!items.length) items = (srv.items || []).map((it) => ({ ...it }));
     const vp = $("inpAnhNhacCustomRequest")?.value || srv.visual_prompt || "";
     const parsed = parseVisualPrompt(vp);
     const style = Object.assign({}, DEFAULT_STYLE, srv.style || {}, parsed);
+    const domSize = Number($("adjProdImgSize")?.value); // cỡ ảnh chung ở Bước 3
+    if (domSize > 0) style.productImageSize = domSize;
     style.matched = parsed.matched.length ? parsed.matched : (srv.style && srv.style.matched) || [];
     const title = (typeof window.studioOutlineTitle === "function" ? window.studioOutlineTitle(scriptTxt) : "") || titleInp || outline.title || srv.title || "";
     return { title, subtitle: outline.subtitle || srv.subtitle || "", summarySubtitle: srv.summary_subtitle || "",
@@ -162,6 +166,8 @@
   function wire() {
     const debounced = (() => { let t; return () => { clearTimeout(t); t = setTimeout(render, 120); }; })();
     ["inpScript", "inpTitle", "inpAnhNhacCustomRequest"].forEach((id) => $(id)?.addEventListener("input", debounced));
+    document.addEventListener("input", (e) => { const id = (e.target && e.target.id) || ""; if (/^(adjProdImgSize|adjProdImgSizeRange|prodScaleInput_\d+)$/.test(id)) debounced(); });
+    document.addEventListener("click", (e) => { const oc = e.target && e.target.closest && e.target.closest("button")?.getAttribute("onclick") || ""; if (/nudgeItemImageScale|onItemScaleInputChange|setQuickProductImageSize/.test(oc)) debounced(); });
     document.addEventListener("studio:projectloaded", () => { state.idx = 0; fetchServer(); });
     document.addEventListener("studio:themechange", render);
     const origPop = window.populateWorkspace;

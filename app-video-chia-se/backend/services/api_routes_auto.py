@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from services.api_routes import route
 
-ALLOWED_KEYS = ("collageLayout", "collageStyle", "sourceLinks", "autoInfoFromSources", "infoTemplate")
+ALLOWED_KEYS = ("collageLayout", "collageStyle", "sourceLinks", "autoInfoFromSources", "infoTemplate", "aiWithSources")
 
 
 @route("POST", r"^/api/projects/([^/]+)/media-settings$")
@@ -38,6 +38,8 @@ def _media_settings(pid, body, qs):
     if "infoTemplate" in body:
         lines = [ln.strip() for ln in str(body.get("infoTemplate") or "").splitlines() if ln.strip()]
         st["infoTemplate"] = "\n".join(lines[:6])  # tối đa 6 dòng mô tả
+    if "aiWithSources" in body:
+        st["aiWithSources"] = bool(body["aiWithSources"])
     if "autoInfoFromSources" in body:
         st["autoInfoFromSources"] = bool(body["autoInfoFromSources"])
     save_project_state(pdir, proj)

@@ -41,6 +41,8 @@ CASES = {
     "benh_vien": "7. BỆNH VIỆN ĐI SINH\n\nTừ dũ\nHùng Vương\nĐH Y Dược\nMê Kông\n",
     "bac_si": "6 KÊNH BÁC SĨ\n\n1. BS A\n- Sản khoa\n2. BS B\n- Nhi khoa\n",
     "bullets_sub": "3 MÓN ĐỒ\nRẻ - Bền - Đẹp\n\n1. Bình sữa\n- BPA free\n2. Khăn\n- Mềm\n3. Nhiệt kế\n- Nhanh\n",
+    "numbered_first_no_bullet": "7 BỆNH VIỆN\n\n1. BV Từ Dũ\n2. Hùng Vương\n- Phòng sinh gia đình\n",
+    "numbered_with_plain_sub": "GIỎ ĐỒ\nMẹ nên sắm sớm\n1. Áo\n- Cotton\n2. Tã\n",
 }
 NAMES = ["Thuyền xưa", "Anpaso", "Sokfarm", "Bear"]
 
@@ -123,3 +125,10 @@ def test_settings_save_sets_then_clears_script_subtitle(api):
     st, a = api.post("/api/script/analyze", {"text": AN_DAM})
     assert a["outline"]["count"] == 4 and a["outline"]["subtitle"].startswith("Chất lượng")
     api.post(f"/api/projects/{pid}/delete")
+
+
+def test_numbered_item_without_bullets_is_not_subtitle():
+    o = _py(CASES["numbered_first_no_bullet"])
+    assert [e["heading"] for e in o["entries"]] == ["BV Từ Dũ", "Hùng Vương"] and o["subtitle"] == ""
+    o2 = _py(CASES["numbered_with_plain_sub"])
+    assert o2["subtitle"] == "Mẹ nên sắm sớm" and [e["heading"] for e in o2["entries"]] == ["Áo", "Tã"]

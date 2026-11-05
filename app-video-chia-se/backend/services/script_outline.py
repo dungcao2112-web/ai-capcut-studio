@@ -57,6 +57,29 @@ def looks_like_subtitle(line: str) -> bool:
     return bool(s) and not NUMBERED_RE.match(s) and not BULLET_RE.match(s) and bool(SEPARATOR_RE.search(f" {s} "))
 
 
+def _bullet_entries(body: list[str]) -> tuple[list[dict[str, Any]] | None, list[str]]:
+    """Định dạng gạch đầu dòng CÓ ĐÁNH SỐ mục: mỗi dòng '1. ...' là 1 mục; dòng không số đứng trước mục đầu tiên
+    là tiêu đề phụ. Không có dòng đánh số => trả None (giữ luật cũ). Bản JS tương đương: script_outline_js.js."""
+    heads = [ln.strip() for ln in body if ln.strip() and not BULLET_RE.match(ln)]
+    if not any(NUMBERED_RE.match(h) for h in heads):
+        return None, []
+    entries: list[dict[str, Any]] = []
+    sub_parts: list[str] = []
+    for ln in body:
+        t = ln.strip()
+        if not t:
+            continue
+        if BULLET_RE.match(t):
+            if entries and _clean_bullet(t):
+                entries[-1]["bullets"].append(_clean_bullet(t))
+        elif NUMBERED_RE.match(t) or entries:
+            if _clean_heading(t):
+                entries.append({"heading": _clean_heading(t), "bullets": []})
+        else:
+            sub_parts.append(t)
+    return entries, sub_parts
+
+
 def parse_outline_extended(raw_text: str, current_title: str, legacy: Callable[[str, str], dict[str, Any]]) -> dict[str, Any]:
     raw_lines = (raw_text or "").splitlines()
     explicit = ""
@@ -79,10 +102,13 @@ def parse_outline_extended(raw_text: str, current_title: str, legacy: Callable[[
     first_idx = nonempty[0]
     body = kept[first_idx + 1:] if _title_consumed(kept[first_idx], base.get("title", "")) else kept[first_idx:]
     if any(BULLET_RE.match(ln) for ln in body):
-        if explicit:
-            base["subtitle"] = explicit
         base["format"] = "bullets"
-        return base  # định dạng gạch đầu dòng: luật cũ đã đúng
+        entries, sub_parts = _bullet_entries(body)
+        if entries is not None:  # có đánh số mục => dòng có số luôn là MỤC (dù chưa có mô tả)
+            base.update(entries=entries, count=len(entries), subtitle=explicit or " | ".join(sub_parts))
+        elif explicit:
+            base["subtitle"] = explicit
+        return base
 
     blocks = _blocks(body)
     subtitle = explicit

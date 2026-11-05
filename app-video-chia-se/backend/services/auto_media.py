@@ -27,7 +27,7 @@ def media_settings(proj: dict[str, Any]) -> dict[str, Any]:
     links = [str(u) for u in (s.get("sourceLinks") or []) if str(u).startswith(("http://", "https://"))]
     return {"layout": str(s.get("collageLayout") or "1"), "style": dict(s.get("collageStyle") or {}),
             "links": links, "auto_info": bool(s.get("autoInfoFromSources", True)),
-            "template": str(s.get("infoTemplate") or "")}
+            "template": str(s.get("infoTemplate") or ""), "ai_with_sources": bool(s.get("aiWithSources", True))}
 
 
 def web_candidate(name: str, title: str, out_path: Path, cand: int) -> Path | None:
@@ -81,7 +81,8 @@ def process_item(pdir: Path, item: dict[str, Any], k: int, n: int, cfg: dict[str
         rep["facts"] = len(info["facts"])
         rep["snippets"] = len(info["snippets"])
         # Chỉ điền cho mục CHƯA có mô tả (mô tả sếp viết không bao giờ bị ghi đè); mô tả lấy tự động thì được làm mới
-        if cfg["auto_info"] and (not item.get("bullets") or item.get("bullets_from_sources")):
+        # (mô tả do Agy CLI viết theo mẫu được giữ — chỉ làm mới mô tả do app tự điền)
+        if cfg["auto_info"] and (not item.get("bullets") or (item.get("bullets_from_sources") and item.get("bullets_source") != "ai")):
             if desc:
                 item["bullets"] = desc
                 item["ghi_chu"] = " | ".join(desc)

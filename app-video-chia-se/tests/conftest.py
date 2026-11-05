@@ -82,8 +82,14 @@ def api(demo):
 
 @pytest.fixture()
 def fresh_demo(demo):
-    """Tạo lại 2 dự án mẫu trước test có sửa dữ liệu."""
+    """Tạo lại 2 dự án mẫu + làm trống kho ảnh dùng chung trước test có sửa dữ liệu (test độc lập nhau)."""
+    import shutil
+
     from services.demo_seed import ensure_demo_projects
+
+    lib = Path(os.environ["VDCS_PRODUCT_IMAGES_DIR"])
+    shutil.rmtree(lib, ignore_errors=True)
+    lib.mkdir(parents=True, exist_ok=True)
 
     ensure_demo_projects(force=True)
     return True

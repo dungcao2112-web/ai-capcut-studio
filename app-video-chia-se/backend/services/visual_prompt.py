@@ -184,8 +184,10 @@ def build_preview_data(pid: str, pdir: Path) -> dict[str, Any]:
             "name": str(it.get("display_name") or it.get("ten") or ""),
             "bullets": list(it.get("bullets") or ([it["ghi_chu"]] if it.get("ghi_chu") else [])),
             "image_url": _file_url(pid, ref, pdir) if ref else "",
+            "image_scale": float(it.get("image_scale") or 1.0),
         })
     style = style_from_settings(settings)
+    style["productImageSize"] = int(settings.get("productImageSize") or 400)
     vp = str(proj.get("visual_prompt") or "")
     if vp:
         parsed = parse_visual_prompt(vp)

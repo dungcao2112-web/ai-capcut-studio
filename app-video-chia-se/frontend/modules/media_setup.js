@@ -24,7 +24,7 @@
   const BGS = [["cream", "Kem"], ["beige", "Be ấm"], ["white", "Trắng"], ["transparent", "Trong suốt"]];
   const BORDERS = [["white", "Trắng"], ["brown", "Nâu"], ["gold", "Vàng"], ["none", "Không"]];
   const KIND_ICON = { facebook: "📘", tiktok: "🎵", shopee: "🛍️", lazada: "🛒", youtube: "▶️", instagram: "📸", tiki: "🛒", image: "🖼️", web: "🌐" };
-  const M = { layout: "1", style: { bg: "cream", border: "white" }, links: [], autoInfo: true, template: "", status: {}, timer: null };
+  const M = { layout: "1", style: { bg: "cream", border: "white" }, links: [], autoInfo: true, aiAuto: true, template: "", status: {}, timer: null };
   const TPL_CHIPS = ["{địa chỉ}", "{giá}", "{hotline}", "{giờ mở cửa}", "{tóm tắt}"];
 
   const kindOf = (u) => {
@@ -57,6 +57,7 @@
         <button type="button" class="sm" id="msTplCustom" title="Tự đặt tên chỗ trống, VD {bác sĩ trưởng khoa} — app tìm dòng 'Bác sĩ trưởng khoa: ...' trong link">＋ Chỗ trống tự đặt</button></div>
       <textarea id="msTemplate" rows="3" placeholder="VD:&#10;📍 {địa chỉ}&#10;Giá sinh thường: {giá}&#10;(Để trống = app tự chọn: địa chỉ, giá, hotline...)">${esc(M.template)}</textarea>
       <div class="ms-foot"><label style="margin:0; display:inline-flex; gap:6px; align-items:center;"><input type="checkbox" id="msAutoInfo" style="width:auto;" ${M.autoInfo ? "checked" : ""}/> 📝 Tự điền mô tả theo mẫu cho mục chưa có mô tả</label>
+        <label style="margin:0; display:inline-flex; gap:6px; align-items:center;" title="Có link nguồn thì Agy CLI tự đọc nội dung & viết mô tả đúng mẫu (máy chưa có Agy => app tự điền theo mẫu)"><input type="checkbox" id="msAiAuto" style="width:auto;" ${M.aiAuto ? "checked" : ""}/> 🤖 Tự bật Agy CLI đọc link</label>
         <span>${M.links.length ? `<span class="badge info">${M.links.length} link</span> <button type="button" class="sm" id="msClear">Xoá hết link</button>` : ""}
           <button type="button" class="sm primary" id="msApplyNow" title="Áp dụng mẫu ảnh & nguồn cho các mục đã có ảnh (không tìm lại từ đầu)">🧩 Áp dụng cho các mục hiện có</button></span></div>`;
     box.querySelectorAll("[data-l]").forEach((b) => (b.onclick = () => { M.layout = b.dataset.l; saveSoon(); render(); }));
@@ -68,6 +69,7 @@
     inp.addEventListener("input", () => { if (/\s$/.test(inp.value) || inp.value.includes("\n")) absorb(inp); });
     inp.addEventListener("blur", () => absorb(inp));
     $("msAutoInfo").onchange = (e) => { M.autoInfo = e.target.checked; saveSoon(); };
+    $("msAiAuto").onchange = (e) => { M.aiAuto = e.target.checked; saveSoon(); };
     const tpl = $("msTemplate");
     tpl.addEventListener("input", () => { M.template = tpl.value; saveSoon(); });
     const insertTpl = (text) => {
@@ -112,9 +114,9 @@
     if (!pid) return;
     try {
       await window.apiPost(`/api/projects/${encodeURIComponent(pid)}/media-settings`,
-        { collageLayout: M.layout, collageStyle: M.style, sourceLinks: M.links, autoInfoFromSources: M.autoInfo, infoTemplate: M.template });
+        { collageLayout: M.layout, collageStyle: M.style, sourceLinks: M.links, autoInfoFromSources: M.autoInfo, infoTemplate: M.template, aiWithSources: M.aiAuto });
       const proj = cur().project;
-      if (proj) Object.assign(proj.settings = proj.settings || {}, { collageLayout: M.layout, collageStyle: { ...M.style }, sourceLinks: M.links.slice(), autoInfoFromSources: M.autoInfo, infoTemplate: M.template });
+      if (proj) Object.assign(proj.settings = proj.settings || {}, { collageLayout: M.layout, collageStyle: { ...M.style }, sourceLinks: M.links.slice(), autoInfoFromSources: M.autoInfo, infoTemplate: M.template, aiWithSources: M.aiAuto });
       document.dispatchEvent(new CustomEvent("studio:mediasettings", { detail: { template: M.template, links: M.links.slice() } }));
       if (inspect) inspectLinks();
     } catch (e) { toast("Không lưu được thiết lập ảnh: " + esc(e.message), "error"); }
@@ -156,6 +158,7 @@
     M.links = Array.isArray(s.sourceLinks) ? s.sourceLinks.slice() : [];
     M.autoInfo = s.autoInfoFromSources !== false; // mặc định BẬT: link nguồn chủ yếu để lấy thông tin
     M.template = String(s.infoTemplate || "");
+    M.aiAuto = s.aiWithSources !== false; // mặc định BẬT
     M.status = {};
     render();
     if (M.links.length) inspectLinks();
@@ -177,6 +180,8 @@
     if (typeof orig !== "function" || orig.__ms) return;
     window.parseAndFetchAnhNhacList = async function (...a) {
       if (M.timer) await save(false); // đảm bảo mẫu ảnh & link vừa chọn đã được lưu trước khi tự tìm
+      const chk = $("chkAnhNhacPromptAi");
+      if (chk && M.links.length && M.aiAuto && !chk.checked) chk.checked = true; // có link => tự bật Agy CLI
       if (M.layout !== "1" || M.links.length) toast(`🔍 Đang tìm ảnh${M.links.length ? ` (ưu tiên ${M.links.length} link nguồn)` : ""}${M.layout !== "1" ? " & tự ghép theo mẫu đã chọn" : ""}...`, "info", 4000);
       return orig.apply(this, a);
     };
