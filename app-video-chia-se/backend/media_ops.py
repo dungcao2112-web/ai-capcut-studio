@@ -2186,7 +2186,7 @@ def download_web_image_for_item(
     return {"ok": False, "query": query, "error": "Không tải được ảnh từ các URL ứng viên", "candidates": candidates}
 
 
-def parse_script_outline(raw_text: str, current_title: str = "") -> dict[str, Any]:
+def _parse_script_outline_legacy(raw_text: str, current_title: str = "") -> dict[str, Any]:
     """Deterministically analyze raw script text to extract title, subtitle, and exact item entries
     before any pipeline step or AI call runs.
     """
@@ -2269,6 +2269,16 @@ def parse_script_outline(raw_text: str, current_title: str = "") -> dict[str, An
     }
 
 
+def parse_script_outline(raw_text: str, current_title: str = "") -> dict[str, Any]:
+    """Phân tích dàn ý: luật cũ + tiêu đề phụ (có/không) + định dạng khối cách dòng trống
+    (xem backend/services/script_outline.py)."""
+    try:
+        from services.script_outline import parse_outline_extended
+    except ImportError:
+        return _parse_script_outline_legacy(raw_text, current_title)
+    return parse_outline_extended(raw_text, current_title, _parse_script_outline_legacy)
+
+
 def parse_and_fetch_anh_nhac_list(
     project_dir: Path,
     raw_text: str,
@@ -2332,7 +2342,10 @@ def parse_and_fetch_anh_nhac_list(
             if isinstance(parsed_ai, dict):
                 if parsed_ai.get("title"):
                     title = str(parsed_ai["title"]).strip().upper()
-                if parsed_ai.get("subtitle") and not subtitle:
+                # Chỉ nhận tiêu đề phụ do AI đề xuất khi sếp yêu cầu rõ — kịch bản không có thì video không có
+                if parsed_ai.get("subtitle") and not subtitle and re.search(
+                    r"phụ\s*đề|tiêu\s*đề\s*phụ|dòng\s*phụ|tagline", req_clean, flags=re.I
+                ):
                     subtitle = str(parsed_ai["subtitle"]).strip()
                 for it_ai in parsed_ai.get("items") or []:
                     idx_ai = int(it_ai.get("i") or 0)
@@ -2410,6 +2423,7 @@ def parse_and_fetch_anh_nhac_list(
     bang = {
         "tieu_de": title,
         "subtitle": subtitle,
+        "subtitle_source": "script" if subtitle and subtitle == outline.get("subtitle") else ("ai" if subtitle else ""),
         "tong": 0,
         "items": final_items,
     }

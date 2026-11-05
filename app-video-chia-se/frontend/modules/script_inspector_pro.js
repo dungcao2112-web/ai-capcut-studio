@@ -1,69 +1,30 @@
 // -*- coding: utf-8 -*-
 // Script Inspector Pro: sửa trực tiếp tiêu đề / tên mục / dòng mô tả ngay trong #scriptAnalysisPreviewBox,
 // đổi thứ tự (↑/↓ hoặc kéo-thả), thêm/xoá mục, cảnh báo & "Tự động chuẩn hoá" 1 chạm, đồng bộ ngược vào #inpScript.
-// Bọc onScriptInputChanged (giữ nguyên hành vi cũ) + sửa lỗi bộ phân tích JS làm mất số trong tiêu đề "6 KÊNH...".
+// Bọc onScriptInputChanged (giữ nguyên hành vi cũ). Hỗ trợ tiêu đề phụ (có/không) — đổi qua lại mục <-> tiêu đề phụ.
 (function () {
   "use strict";
   const $ = (id) => document.getElementById(id);
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const toast = (m, t, ms) => (window.showToast ? window.showToast(m, t, ms) : null);
-  let model = null; // { prefix, title, subtitle, entries:[{heading, bullets[]}] }
+  let model = null; // { prefix, title, subtitle, format, entries:[{heading, bullets[]}] }
   let editing = false;
   let undoText = null;
 
-  // Tiêu đề theo đúng luật backend parse_script_outline (Python): "7. BỆNH VIỆN" -> "BỆNH VIỆN"; "6 KÊNH..." giữ số 6
-  function firstLineInfo(raw) {
-    const rawLines = String(raw || "").split(/\r?\n/);
-    const lines = rawLines.map((l) => l.trim()).filter(Boolean);
-    if (!lines.length) return { title: "", prefix: "" };
-    const first = lines[0];
-    const second = lines[1] || "";
-    const mHead = first.match(/^(\d+)[\.\)\-:]\s*(.+)$/);
-    const secondIsNum2 = /^2[\.\)\-:]\s+/.test(second);
-    const followedByBlank = rawLines.length > 1 && !rawLines[1].trim();
-    const isCaps = first === first.toLocaleUpperCase("vi") && /\p{L}/u.test(first);
-    if (mHead && (isCaps || Number(mHead[1]) !== 1 || followedByBlank || !secondIsNum2)) {
-      return { title: mHead[2].trim().toLocaleUpperCase("vi"), prefix: first.slice(0, first.length - mHead[2].length) };
-    }
-    if (lines.length >= 2 && (isCaps || followedByBlank) && !/^[\-\*\•\+]\s+/.test(first) && !secondIsNum2) {
-      return { title: first.toLocaleUpperCase("vi"), prefix: "" };
-    }
-    return { title: "", prefix: "" };
-  }
-  window.studioOutlineTitle = (raw) => firstLineInfo(raw).title;
-
-  const origParse = window.parseScriptOutlineJS;
-  if (typeof origParse === "function") {
-    window.parseScriptOutlineJS = function (rawText, fallbackTitle = "") {
-      const out = origParse(rawText, fallbackTitle);
-      const fixed = firstLineInfo(rawText).title;
-      if (out.hasExplicitTitle && fixed) out.title = fixed;
-      return out;
-    };
-  }
-
+  // Luật phân tích & ghi ngược nằm ở modules/script_outline_js.js (cùng luật với backend)
   function buildModel(raw) {
     const o = window.parseScriptOutlineJS(raw, "");
-    const info = firstLineInfo(raw);
+    const info = window.studioFirstLineInfo(raw);
     return {
       prefix: info.prefix,
       title: o.hasExplicitTitle ? info.title || o.title : "",
       subtitle: o.subtitle || "",
+      format: o.format || "list",
       entries: (o.entries || []).map((e) => ({ heading: e.heading, bullets: (e.bullets || []).slice() })),
     };
   }
-
-  function serialize(m) {
-    const out = [];
-    if (m.title.trim()) { out.push(`${m.prefix || ""}${m.title.trim().toLocaleUpperCase("vi")}`); }
-    if (m.subtitle.trim()) out.push(m.subtitle.trim());
-    if (out.length) out.push("");
-    m.entries.forEach((e, k) => {
-      out.push(`${k + 1}. ${e.heading.trim()}`);
-      e.bullets.map((b) => b.trim()).filter(Boolean).forEach((b) => out.push(`- ${b}`));
-    });
-    return out.join("\n") + "\n";
-  }
+  const serialize = (m) => window.serializeStudioOutline(m);
+  const FORMAT_LABEL = { blocks: "Khối cách dòng trống", bullets: "Gạch đầu dòng", list: "Mỗi dòng 1 mục" };
 
   // Cảnh báo — đồng bộ với backend services/qa_validator.outline_warnings
   function titleNumber(title) {
@@ -130,6 +91,7 @@
       <div class="si-actions">
         <button class="sm" data-act="up" ${k === 0 ? "disabled" : ""} title="Đưa lên">↑</button>
         <button class="sm" data-act="down" ${k === n - 1 ? "disabled" : ""} title="Đưa xuống">↓</button>
+        <button class="sm" data-act="tosub" title="Đặt dòng này làm Tiêu đề phụ (không phải mục)">⤴</button>
         <button class="sm danger" data-act="del" title="Xoá mục">×</button>
       </div></div>`;
   }
@@ -151,7 +113,9 @@
       <div class="si-head"><label style="margin:0;">📌 Tiêu đề chính (sửa trực tiếp)</label>
         <span>📋 Tổng số mục: <b class="si-count" style="color:var(--sp-ok)">${n} mục</b></span></div>
       <input class="si-title-input" data-f="title" value="${esc(model.title)}" placeholder="VD: 6 KÊNH BÁC SĨ SẢN NHI" />
-      ${model.subtitle ? `<input data-f="subtitle" value="${esc(model.subtitle)}" placeholder="Dòng phụ đề" />` : ""}
+      <div class="si-head"><input data-f="subtitle" value="${esc(model.subtitle)}" placeholder="✨ Tiêu đề phụ (không bắt buộc) — VD: Chất lượng - Xài bền - Kinh tế" style="flex:1; min-width:200px;" />
+        ${model.subtitle ? '<button class="sm" data-act="subtoitem" title="Đây không phải tiêu đề phụ — chuyển thành mục 1">⤵ Thành mục</button>' : ""}
+        <span class="badge" title="Định dạng kịch bản nhận diện được">${FORMAT_LABEL[model.format] || ""}</span></div>
       <div class="si-warnings">${warningsHtml(model)}</div>
       <div class="si-list">${model.entries.map((e, k) => entryHtml(e, k, n, anyBullets && !e.bullets.length)).join("")}</div>
       <div class="si-foot"><span>✏️ Sửa ở đây sẽ tự cập nhật ô Kịch bản & Xem trước 9:16</span>
@@ -194,6 +158,15 @@
     if (act === "up" && k > 0) [E[k - 1], E[k]] = [E[k], E[k - 1]];
     else if (act === "down" && k < E.length - 1) [E[k + 1], E[k]] = [E[k], E[k + 1]];
     else if (act === "del") { const name = E[k].heading; E.splice(k, 1); toast(`Đã xoá mục <b>${esc(name)}</b> — bấm ↶ Hoàn tác nếu nhầm.`, "warning"); }
+    else if (act === "tosub") {
+      const it = E.splice(k, 1)[0];
+      model.subtitle = [it.heading, ...it.bullets].join(" - ");
+      toast(`Đã đặt "<b>${esc(model.subtitle)}</b>" làm tiêu đề phụ.`, "success");
+    } else if (act === "subtoitem") {
+      E.unshift({ heading: model.subtitle.trim(), bullets: [] });
+      model.subtitle = "";
+      toast("Đã chuyển tiêu đề phụ thành mục 1.", "info");
+    }
     else if (act === "add") E.push({ heading: `Mục mới ${E.length + 1}`, bullets: E.some((x) => x.bullets.length) ? ["Mô tả / địa chỉ"] : [] });
     else if (act === "normalize") { normalizeModel(model); toast("Đã chuẩn hoá kịch bản: tiêu đề khớp số mục, đánh số lại 1..N, làm sạch dòng mô tả.", "success"); }
     else if (act === "undo") {

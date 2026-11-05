@@ -121,10 +121,13 @@ Route cũ `upload-doctor-image` / `edit-doctor-image` nhận thêm tuỳ chọn 
 **Chạy & kiểm thử trên Cloud:**
 ```bash
 python3 desktop_app.py --server --port 8765   # tự tạo 2 dự án mẫu khi chạy trên Linux
-python3 -m pytest tests/ -q                    # 39 test, dùng thư mục dự án tạm (không đụng projects/)
+python3 -m pytest tests/ -q                    # 45 test, dùng thư mục dự án tạm (không đụng projects/)
 ```
 
 **Quy tắc khi sửa tiếp:**
 - Sửa `remotion/ConvoAppDynamic.tsx` xong phải đồng bộ lại hằng `CONVO_APP_DYNAMIC_TSX` trong `remotion_templates.py` (test `test_remotion_embedded_template_in_sync_with_file` sẽ báo nếu quên).
 - Biến `currentProjectId` / `currentProject` trong `app.js` là `let` (không nằm trên `window`) — module mới đọc qua `window.studioCurrent()`.
 - Module mới giữ ≤ 260 dòng (có test kiểm tra).
+- Luật phân tích kịch bản nằm ở `backend/services/script_outline.py` và `frontend/modules/script_outline_js.js` (test `test_js_and_python_parsers_agree_and_serialize_roundtrip` bắt buộc 2 bên ra cùng kết quả):
+  - **Tiêu đề phụ** (không bắt buộc): ghi rõ `Tiêu đề phụ: ...` hoặc để 1 dòng riêng có ` - ` / `•` / `|` ngay sau tiêu đề (VD `Chất lượng - Xài bền - Kinh tế`). Kịch bản không có => video không có (tiêu đề phụ cũ lấy từ kịch bản tự xoá, `bang.subtitle_source = "script"`).
+  - **Định dạng khối**: các mục cách nhau bằng dòng trống, dòng đầu = tên mục, các dòng sau = mô tả.

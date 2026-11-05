@@ -403,9 +403,19 @@ class AppRequestHandler(BaseHTTPRequestHandler):
                         if outline.get("title"):
                             proj["title"] = outline["title"]
                             bang_in["tieu_de"] = outline["title"]
+                        prev_bang = read_json(pdir / "text" / "bang.json", {}) or {}
                         if outline.get("subtitle"):
                             bang_in["subtitle"] = outline["subtitle"]
+                            bang_in["subtitle_source"] = "script"
                             proj.setdefault("settings", {})["summarySubtitle"] = outline["subtitle"].upper()
+                        elif prev_bang.get("subtitle_source") == "script":
+                            # Kịch bản mới KHÔNG có tiêu đề phụ => xoá tiêu đề phụ cũ (chỉ khi nó lấy từ kịch bản)
+                            old_sub = str(prev_bang.get("subtitle") or "")
+                            bang_in["subtitle"] = ""
+                            bang_in.pop("subtitle_source", None)
+                            sett = proj.setdefault("settings", {})
+                            if str(sett.get("summarySubtitle") or "") == old_sub.upper():
+                                sett["summarySubtitle"] = ""
                         out_entries = outline.get("entries") or []
                         cur_items = bang_in.get("items") or []
                         if out_entries and len(out_entries) != len(cur_items):
@@ -629,6 +639,7 @@ class AppRequestHandler(BaseHTTPRequestHandler):
                 use_ai = bool(body.get("use_ai", False))
                 custom_request = str(body.get("custom_request") or "").strip()
                 cur_title = str(body.get("title") or proj.get("title") or "").strip()
+                prev_bang_an = read_json(pdir / "text" / "bang.json", {}) or {}
                 parsed_res = parse_and_fetch_anh_nhac_list(
                     pdir,
                     raw_text,
@@ -641,6 +652,10 @@ class AppRequestHandler(BaseHTTPRequestHandler):
                 proj.setdefault("settings", {})["preset"] = "anh_nhac"
                 if parsed_res.get("subtitle"):
                     proj["settings"]["summarySubtitle"] = str(parsed_res["subtitle"]).upper()
+                elif prev_bang_an.get("subtitle_source") == "script" and str(
+                    proj["settings"].get("summarySubtitle") or ""
+                ) == str(prev_bang_an.get("subtitle") or "").upper():
+                    proj["settings"]["summarySubtitle"] = ""  # kịch bản mới không có tiêu đề phụ
                 if "itemDurationSec" in body:
                     proj["settings"]["itemDurationSec"] = float(body.get("itemDurationSec") or 2.4)
                 if "bgmPath" in body:
