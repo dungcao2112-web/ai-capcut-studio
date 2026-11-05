@@ -145,6 +145,8 @@ type ProductItem = {
   image_file: string;
   name_and_qty?: string;
   image_scale?: number;
+  image_bbox?: number[]; // [x, y, w, h] 0..1 — vùng có nội dung (bỏ viền trong suốt), do backend đo
+  image_aspect?: number; // tỉ lệ rộng/cao của vùng có nội dung
 };
 
 export const formatVNPrice = (
@@ -527,9 +529,23 @@ const GioDoItemCard: React.FC<{
         : isSingleBullet
         ? 18 + estLines(bullets[0], pillFS, 884, 2) * pillFS * 1.22 + 30
         : 10 + 34 + bullets.reduce((acc, b) => acc + estLines(b, bulletFS(b), 872, 2) * bulletFS(b) * 1.25 + 6, 0));
-    const maxBoxH = 1080 - 24 - effTop - textBlockH - 8;
-    const heroFitPx = Math.max(300, Math.min(heroImgPx, Math.floor(maxBoxH / 0.72)));
-    const heroBoxH = Math.round(heroFitPx * 0.72);
+    // Ảnh TO ĐỀU: cắt bỏ viền trong suốt (image_bbox) rồi phóng thẻ ảnh lấp đầy khoảng trống thật
+    // giữa tiêu đề và tên mục — vừa theo chiều rộng (≤ 900px × heroImageScale) lẫn chiều cao còn lại.
+    const bb = Array.isArray(item.image_bbox) && item.image_bbox.length === 4 && item.image_bbox[2] > 0 && item.image_bbox[3] > 0
+      ? item.image_bbox.map(Number)
+      : null;
+    const frameInset = cfg.doctorCardFrame ? 24 : 0;
+    const maxBoxH = Math.max(260, 1080 - 24 - effTop - textBlockH - 8);
+    const maxBoxW = Math.min(1000, Math.round(900 * heroScale));
+    const contentAspect = bb ? Number(item.image_aspect) || bb[2] / bb[3] : 1 / 0.72;
+    let heroFitPx = Math.min(maxBoxW, Math.round((maxBoxH - frameInset) * contentAspect) + frameInset);
+    if (!bb) heroFitPx = Math.max(300, Math.min(heroImgPx, Math.floor(maxBoxH / 0.72)));
+    const heroBoxH = bb ? Math.round((heroFitPx - frameInset) / contentAspect) + frameInset : Math.round(heroFitPx * 0.72);
+    const innerW = heroFitPx - frameInset;
+    const innerH = heroBoxH - frameInset;
+    const natAspect = bb ? contentAspect * (bb[3] / bb[2]) : 1; // tỉ lệ rộng/cao của cả file ảnh
+    const imgW = bb ? innerW / bb[2] : innerW;
+    const imgH = bb ? imgW / natAspect : innerW;
     return (
       <div
         style={{
@@ -591,19 +607,36 @@ const GioDoItemCard: React.FC<{
                 ✚ BÁC SĨ
               </div>
             ) : null}
-            <Img
-              src={staticFile(`${mediaDir}/products/${item.image_file}`)}
-              style={{
-                width: cfg.doctorCardFrame ? heroFitPx - 24 : heroFitPx,
-                height: cfg.doctorCardFrame ? heroBoxH - 24 : heroFitPx,
-                maxWidth: "none",
-                maxHeight: "none",
-                objectFit: "contain",
-                filter: isLightBg
-                  ? "drop-shadow(0 16px 30px rgba(90,65,45,.26))"
-                  : "drop-shadow(0 14px 28px rgba(0,0,0,.48))",
-              }}
-            />
+            {bb ? (
+              <div style={{ position: "relative", width: innerW, height: innerH, overflow: "hidden", flexShrink: 0 }}>
+                <Img
+                  src={staticFile(`${mediaDir}/products/${item.image_file}`)}
+                  style={{
+                    position: "absolute",
+                    left: -bb[0] * imgW,
+                    top: -bb[1] * imgH,
+                    width: imgW,
+                    height: imgH,
+                    maxWidth: "none",
+                    maxHeight: "none",
+                  }}
+                />
+              </div>
+            ) : (
+              <Img
+                src={staticFile(`${mediaDir}/products/${item.image_file}`)}
+                style={{
+                  width: imgW,
+                  height: imgH,
+                  maxWidth: "none",
+                  maxHeight: "none",
+                  objectFit: "contain",
+                  filter: isLightBg
+                    ? "drop-shadow(0 16px 30px rgba(90,65,45,.26))"
+                    : "drop-shadow(0 14px 28px rgba(0,0,0,.48))",
+                }}
+              />
+            )}
           </div>
         ) : null}
         <div

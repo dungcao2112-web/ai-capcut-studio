@@ -96,3 +96,41 @@ body.lp-open .sp-toast-stack { right: 368px; }
 .qa-row.fail { border-color: rgba(239, 68, 68, 0.55); } .qa-row.warn { border-color: rgba(245, 158, 11, 0.55); }
 .qa-row .qa-detail { color: var(--sp-muted); font-size: 11.5px; margin-top: 2px; }
 .qa-fixlog { margin-top: 8px; font-size: 12px; color: var(--sp-ok); }
+
+/* ---------- Khung hình & Ghép ảnh (image_cropper / image_framer / collage_builder) ---------- */
+.modal-box:has(.fr-wrap) { width: min(1180px, 96vw); max-width: 96vw; }
+.fr-wrap { display: flex; flex-direction: column; gap: 10px; }
+.fr-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 10px; border-radius: 10px; background: var(--sp-surface-2); border: 1px solid var(--sp-border); }
+.fr-tabs { display: flex; gap: 6px; }
+.fr-tabs button.on, .fr-aspects button.on, .cb-lay.on { background: var(--sp-accent-strong) !important; color: #fff !important; border-color: var(--sp-accent) !important; }
+.fr-aspects, .cb-layouts { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 12.5px; color: var(--sp-text-soft); }
+.fr-grid { display: grid; grid-template-columns: 1.2fr 1fr; gap: 14px; align-items: start; }
+.fr-col { background: var(--sp-surface-2); border: 1px solid var(--sp-border); border-radius: 12px; padding: 10px; min-width: 0; }
+.fr-label { font-weight: 700; font-size: 12.5px; color: var(--sp-text); margin-bottom: 6px; }
+.fr-result { display: flex; justify-content: center; background: #F6EFE6; border-radius: 10px; padding: 12px; }
+.fr-result canvas { max-width: 100%; height: auto; border-radius: 14px; box-shadow: 0 10px 24px rgba(60, 40, 25, 0.25); border: 5px solid #fff; }
+.fr-foot { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; align-items: center; }
+.fr-foot span { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.fr-empty { padding: 30px; text-align: center; border: 2px dashed var(--sp-border-strong); border-radius: 12px; color: var(--sp-text-soft); }
+.fr-card-btn { display: flex; gap: 4px; justify-content: flex-end; margin-bottom: 6px; }
+.cr-stage { position: relative; display: inline-block; max-width: 100%; user-select: none; touch-action: none; }
+.cr-img { display: block; max-width: 100%; max-height: 440px; border-radius: 8px; pointer-events: none; }
+.cr-box { position: absolute; border: 2.5px solid #FBBF24; box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.55); cursor: move; box-sizing: border-box; }
+.cr-stage { overflow: hidden; border-radius: 8px; cursor: crosshair; }
+.cr-grid { position: absolute; inset: 0; pointer-events: none; background-image: linear-gradient(rgba(255,255,255,.35) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.35) 1px, transparent 1px); background-size: 33.33% 33.33%; }
+.cr-h { position: absolute; width: 16px; height: 16px; background: #FBBF24; border: 2px solid #fff; border-radius: 50%; z-index: 2; }
+.cr-h.nw { left: -9px; top: -9px; cursor: nwse-resize; } .cr-h.ne { right: -9px; top: -9px; cursor: nesw-resize; }
+.cr-h.sw { left: -9px; bottom: -9px; cursor: nesw-resize; } .cr-h.se { right: -9px; bottom: -9px; cursor: nwse-resize; }
+.cb-lay { flex-direction: column; gap: 3px !important; padding: 6px 8px !important; }
+.cb-lay small { font-size: 10.5px; font-weight: 600; }
+.cb-diag { position: relative; display: block; background: #fff; border: 2px solid #fff; border-radius: 5px; box-shadow: 0 0 0 1px var(--sp-border-strong); }
+.cb-diag i { position: absolute; box-sizing: border-box; border: 1.5px solid #fff; background: #D6B98C; border-radius: 3px; }
+.cb-slots { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; }
+.cb-slot { border: 1px solid var(--sp-border); border-radius: 10px; padding: 6px; background: var(--sp-surface); }
+.cb-slot.on { border-color: var(--sp-accent); box-shadow: 0 0 0 2px var(--sp-accent-soft); }
+.cb-thumb { height: 86px; display: flex; align-items: center; justify-content: center; background: #F6EFE6; border-radius: 7px; overflow: hidden; font-size: 11.5px; color: #8b7563; }
+.cb-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.cb-acts { display: flex; gap: 3px; justify-content: center; margin-top: 5px; flex-wrap: wrap; }
+.cb-acts button { padding: 2px 6px !important; min-width: 26px; justify-content: center; }
+#cbCropPanel:not(:empty) { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--sp-border); }
+@media (max-width: 900px) { .fr-grid { grid-template-columns: 1fr; } }

@@ -1670,6 +1670,13 @@ def _sync_remotion_active_props(pdir: Path, proj: dict[str, Any]) -> dict[str, A
                 base_dn = str(p_it.get("display_name") or p_it.get("ten") or "").strip()
                 p_it["name_and_qty"] = f"{base_dn} {p_it.get('sl', '')} {p_it.get('dv', '')}".strip()
 
+    # Đo vùng có nội dung của từng ảnh (bỏ viền trong suốt) để Remotion phóng ảnh lấp đầy khung
+    try:
+        from services.image_layout import enrich_products_layout
+
+        enrich_products_layout(products, [remotion_dir / "public" / media_dir_name / "products", pdir / "anh" / "products"])
+    except Exception:
+        pass
     total_frames = int(timeline["frames"]) + (151 if preset in ("giodo", "anh_nhac") else 0)
     active_payload = {
         "projectId": proj["id"],

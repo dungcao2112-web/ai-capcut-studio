@@ -19,12 +19,13 @@ import re
 import urllib.parse
 from typing import Any, Callable
 
-_ROUTES: list[tuple[str, re.Pattern, Callable]] = []
+_ROUTES: list[tuple[str, re.Pattern, Callable, bool]] = []
 
 
-def route(method: str, pattern: str):
+def route(method: str, pattern: str, raw: bool = False):
+    """raw=True: body là bytes thô (tải ảnh lên), không parse JSON."""
     def deco(fn: Callable) -> Callable:
-        _ROUTES.append((method.upper(), re.compile(pattern), fn))
+        _ROUTES.append((method.upper(), re.compile(pattern), fn, raw))
         return fn
 
     return deco
@@ -32,16 +33,22 @@ def route(method: str, pattern: str):
 
 def dispatch_extra(handler: Any, method: str, path: str, qs: dict[str, list[str]]) -> bool:
     """Trả về True nếu route đã được xử lý (đã gửi response)."""
-    for meth, rx, fn in _ROUTES:
+    for meth, rx, fn, raw in _ROUTES:
         if meth != method.upper():
             continue
         m = rx.match(path)
         if not m:
             continue
         args = [urllib.parse.unquote(g) for g in m.groups()]
-        body = handler._read_json_body() if method.upper() == "POST" else {}
+        if method.upper() != "POST":
+            body = {}
+        elif raw:
+            length = int(handler.headers.get("Content-Length", "0") or "0")
+            body = handler.rfile.read(length) if length > 0 else b""
+        else:
+            body = handler._read_json_body()
         try:
-            result = fn(*args, body=body or {}, qs=qs)
+            result = fn(*args, body=body if raw else (body or {}), qs=qs)
         except FileNotFoundError as exc:
             handler._send_json({"error": str(exc)}, status=404)
             return True
@@ -175,3 +182,7 @@ def _batch(pid, body, qs):
     res = batch_process_project(pid, get_project_dir(pid), options=body)
     res["project"] = load_project_state(pid)
     return res
+
+
+# Route ảnh theo mục (Chọn khung hình / Ghép nhiều ảnh) — đăng ký vào cùng bộ định tuyến
+from services import api_routes_media as _api_routes_media  # noqa: E402,F401

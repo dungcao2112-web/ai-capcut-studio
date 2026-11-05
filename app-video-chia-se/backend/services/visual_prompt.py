@@ -140,8 +140,14 @@ def save_and_apply_visual_prompt(pdir: Path, text: str, apply: bool = True) -> d
             "changes": style["matched"]}
 
 
-def _file_url(pid: str, path_str: str) -> str:
-    return f"/api/projects/{urllib.parse.quote(pid)}/file?path={urllib.parse.quote(path_str)}"
+def _file_url(pid: str, path_str: str, pdir: Path | None = None) -> str:
+    """Gắn &v=<thời điểm sửa file> để Live Preview tải lại khi ảnh đổi (tên file Bước 6 giữ nguyên)."""
+    url = f"/api/projects/{urllib.parse.quote(pid)}/file?path={urllib.parse.quote(path_str)}"
+    fp = Path(path_str) if Path(path_str).is_absolute() or pdir is None else pdir / path_str
+    try:
+        return f"{url}&v={int(fp.stat().st_mtime * 1000)}"
+    except OSError:
+        return url
 
 
 def item_image_ref(pdir: Path, item: dict[str, Any], prep_item: dict[str, Any] | None) -> str:
@@ -177,7 +183,7 @@ def build_preview_data(pid: str, pdir: Path) -> dict[str, Any]:
             "i": i_num,
             "name": str(it.get("display_name") or it.get("ten") or ""),
             "bullets": list(it.get("bullets") or ([it["ghi_chu"]] if it.get("ghi_chu") else [])),
-            "image_url": _file_url(pid, ref) if ref else "",
+            "image_url": _file_url(pid, ref, pdir) if ref else "",
         })
     style = style_from_settings(settings)
     vp = str(proj.get("visual_prompt") or "")

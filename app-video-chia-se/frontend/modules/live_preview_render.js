@@ -13,7 +13,7 @@
     let rec = imgCache.get(url);
     if (!rec) {
       rec = { im: new Image(), ok: false, waiters: [] };
-      rec.im.onload = () => { rec.ok = true; rec.waiters.splice(0).forEach((f) => f()); };
+      rec.im.onload = () => { rec.ok = true; rec.bbox = contentBox(rec.im); rec.waiters.splice(0).forEach((f) => f()); };
       rec.im.onerror = () => { rec.failed = true; };
       rec.im.src = url;
       imgCache.set(url, rec);
@@ -21,6 +21,22 @@
     if (!rec.ok && onReady && !rec.failed) rec.waiters.push(onReady);
     return rec.ok ? rec.im : null;
   }
+
+  // Vùng có nội dung của ảnh (alpha > 24) — giống services/image_layout.py để ảnh lấp đầy khung như Remotion
+  function contentBox(im) {
+    try {
+      const k = Math.min(1, 200 / Math.max(im.width, im.height));
+      const w = Math.max(1, Math.round(im.width * k)), h = Math.max(1, Math.round(im.height * k));
+      const c = document.createElement("canvas"); c.width = w; c.height = h;
+      const g = c.getContext("2d"); g.drawImage(im, 0, 0, w, h);
+      const d = g.getImageData(0, 0, w, h).data;
+      let x1 = w, y1 = h, x2 = -1, y2 = -1;
+      for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (d[(y * w + x) * 4 + 3] > 24) { if (x < x1) x1 = x; if (x > x2) x2 = x; if (y < y1) y1 = y; if (y > y2) y2 = y; }
+      if (x2 < 0) return null;
+      return { x: (x1 / w) * im.width, y: (y1 / h) * im.height, w: ((x2 - x1 + 1) / w) * im.width, h: ((y2 - y1 + 1) / h) * im.height };
+    } catch (e) { return null; }
+  }
+  const bboxOf = (url) => (imgCache.get(url) || {}).bbox || null;
 
   function wrapLines(ctx, text, maxW, maxLines) {
     const words = String(text || "").split(/\s+/).filter(Boolean);
@@ -108,7 +124,7 @@
     return y;
   }
 
-  function drawPills(ctx, bullets, y, style, sizeBase) {
+  function drawPills(ctx, bullets, y, style, sizeBase, measureOnly = false) {
     const dark = isDark(style);
     const single = bullets.length === 1;
     bullets.slice(0, 4).forEach((b, k) => {
@@ -118,6 +134,7 @@
       const tw = Math.max(...fit.lines.map((ln) => ctx.measureText(ln).width)) + 76;
       const th = fit.lines.length * fit.size * 1.22 + 26;
       const left = style.centerInfoPills === false ? 110 : W / 2 - tw / 2;
+      if (measureOnly) { y += th + 14; return; }
       roundRect(ctx, left, y, tw, th, single ? 999 : 24);
       ctx.fillStyle = dark ? "rgba(15,23,42,0.78)" : "rgba(255,252,245,0.97)";
       ctx.shadowColor = dark ? "rgba(0,0,0,0.45)" : "rgba(110,82,55,0.16)";
@@ -130,112 +147,55 @@
     return y;
   }
 
-  function drawImageContain(ctx, im, x, y, w, h) {
-    const sc = Math.min(w / im.width, h / im.height), dw = im.width * sc, dh = im.height * sc;
-    ctx.drawImage(im, x + (w - dw) / 2, y + (h - dh) / 2, dw, dh);
-  }
-
   function drawItemSlide(ctx, H, st, item, redraw) {
     const style = st.style;
-    drawBackground(ctx, H, style);
-    const top = drawTitle(ctx, H, st.title, st.subtitle, style) + (H > 1500 ? 40 : 14);
+    const dark = isDark(style);
     const tall = H > 1500;
-    const scale = Math.max(0.8, Math.min(1.5, Number(style.heroImageScale) || 1));
-    const cardH = Math.round((tall ? 860 : 520) * scale);
-    const cardW = Math.min(980, Math.round((tall ? 900 : 700) * scale));
-    const cx = (W - cardW) / 2;
-    roundRect(ctx, cx, top, cardW, cardH, 44);
-    ctx.fillStyle = style.cardColor || "#FFFDF9";
-    ctx.shadowColor = isDark(style) ? "rgba(0,0,0,0.5)" : "rgba(110,82,55,0.20)";
-    ctx.shadowBlur = 34; ctx.shadowOffsetY = 12; ctx.fill();
-    ctx.shadowColor = "transparent"; ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
-    ctx.lineWidth = style.doctorCardFrame ? 8 : 4;
-    ctx.strokeStyle = style.doctorCardFrame ? (style.accent || "#1C64B8") : (isDark(style) ? "#334155" : "#E6D8C5");
-    ctx.stroke();
-    const im = loadImage(item.image_url, redraw);
-    ctx.save();
-    roundRect(ctx, cx + 22, top + 22, cardW - 44, cardH - 44, 30);
-    ctx.clip();
-    if (im) drawImageContain(ctx, im, cx + 22, top + 22, cardW - 44, cardH - 44);
-    else {
-      ctx.fillStyle = isDark(style) ? "#94A3B8" : "#B6A08A";
-      ctx.font = `700 46px ${BODY_FONT}`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
-      ctx.fillText(item.image_url ? "⏳ Đang tải ảnh..." : "🖼️ Chưa có ảnh", W / 2, top + cardH / 2);
-    }
-    ctx.restore();
-    if (style.doctorCardFrame) {
-      ctx.font = `700 34px ${BODY_FONT}`;
-      const label = "✚ BÁC SĨ";
-      const lw = ctx.measureText(label).width + 40;
-      roundRect(ctx, cx + 30, top - 24, lw, 50, 999);
-      ctx.fillStyle = style.accent || "#1C64B8"; ctx.fill();
-      ctx.fillStyle = "#fff"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
-      ctx.fillText(label, cx + 30 + lw / 2, top + 1);
-    }
+    drawBackground(ctx, H, style);
+    const top = drawTitle(ctx, H, st.title, st.subtitle, style) + (tall ? 40 : 14);
+    // Đo khối chữ trước => ảnh lấp đầy phần còn lại (giống Remotion: không còn khoảng trống thừa)
     const nameTxt = `${item.i}. ${String(item.name || "").toLocaleUpperCase("vi")}`;
     const nfit = fitText(ctx, nameTxt, BODY_FONT, "700", tall ? 92 : 70, 40, 940, 2);
-    ctx.font = `700 ${nfit.size}px ${BODY_FONT}`;
-    const dark = isDark(style);
-    const nameColor = style.nameColor || (dark ? "#FFD54F" : "#8A4B12");
-    const strokeW = Math.round(nfit.size * (style.nameStrokeBold ? 0.16 : 0.1));
-    let y = drawStrokedLines(ctx, nfit.lines, nfit.size, W / 2, top + cardH + (tall ? 44 : 20), nameColor,
-      dark ? "#000" : "#FFFFFF", strokeW, 1.06);
-    y = drawPills(ctx, item.bullets || [], y + (tall ? 26 : 14), style, tall ? 46 : 34);
-    return y;
-  }
-
-  function summaryTitle(title, count) {
-    const t = String(title || "").toLocaleUpperCase("vi").trim();
-    if (/^TOP\s+\d+/.test(t)) return t.replace(/^TOP\s+\d+/, `TOP ${count}`);
-    if (/^\d+\s+/.test(t)) return t.replace(/^\d+\s+/, `TOP ${count} `);
-    return `TOP ${count} ${t}`;
-  }
-
-  function drawSummarySlide(ctx, H, st, redraw) {
-    const style = st.style;
-    const dark = isDark(style);
-    drawBackground(ctx, H, style);
-    const items = st.items || [];
-    const n = items.length;
-    let y = drawTitle(ctx, H, summaryTitle(st.title, n), st.summarySubtitle || "", style) + 24;
-    const cols = H > 1500 ? (n > 8 ? 2 : 1) : (n > 5 ? 2 : 1);
-    const rows = Math.ceil(n / cols) || 1;
-    const bottomPad = st.summaryNote ? 110 : 50;
-    const gap = 16;
-    const rowH = Math.min(H > 1500 ? 260 : 150, (H - y - bottomPad - gap * (rows - 1)) / rows);
-    const colW = (W - 80 - gap * (cols - 1)) / cols;
-    const big = style.summaryLargeText ? 1.22 : 1;
-    items.forEach((it, k) => {
-      const c = cols === 2 ? Math.floor(k / rows) : 0;
-      const r = cols === 2 ? k % rows : k;
-      const x = 40 + c * (colW + gap);
-      const yy = y + r * (rowH + gap);
-      roundRect(ctx, x, yy, colW, rowH, 26);
+    const pillsH = drawPills(ctx, item.bullets || [], 0, style, tall ? 46 : 34, true);
+    const textH = (tall ? 44 : 20) + nfit.lines.length * nfit.size * 1.06 + (tall ? 26 : 14) + pillsH;
+    const scale = Math.max(0.8, Math.min(1.5, Number(style.heroImageScale) || 1));
+    const im = loadImage(item.image_url, redraw);
+    const bb = im ? bboxOf(item.image_url) || { x: 0, y: 0, w: im.width, h: im.height } : null;
+    const aspect = bb ? bb.w / bb.h : 4 / 3;
+    const inset = style.doctorCardFrame ? 24 : 0;
+    const maxH = Math.max(240, H - (tall ? 70 : 24) - top - textH);
+    const maxW = Math.min(1000, 900 * scale);
+    const boxW = Math.min(maxW, (maxH - inset) * aspect + inset);
+    const boxH = (boxW - inset) / aspect + inset;
+    const cx = (W - boxW) / 2;
+    const y0 = top + Math.max(0, (H - (tall ? 70 : 24) - top - textH - boxH) / 2);
+    if (style.doctorCardFrame || !im) {
+      roundRect(ctx, cx, y0, boxW, boxH, 40);
       ctx.fillStyle = style.cardColor || "#FFFDF9"; ctx.fill();
-      ctx.lineWidth = 3; ctx.strokeStyle = dark ? "#334155" : "#E6D8C5"; ctx.stroke();
-      const thumb = rowH - 24;
-      const im = loadImage(it.image_url, redraw);
-      if (im) { ctx.save(); roundRect(ctx, x + 12, yy + 12, thumb, thumb, 18); ctx.clip(); drawImageContain(ctx, im, x + 12, yy + 12, thumb, thumb); ctx.restore(); }
-      const tx = x + thumb + 24, tw = colW - thumb - 36;
-      const nfit = fitText(ctx, `${it.i}. ${String(it.name || "").toLocaleUpperCase("vi")}`, BODY_FONT, "700",
-        Math.round(Math.min(rowH * 0.3, 56) * big), 20, tw, 2);
-      const sub = (it.bullets || [])[0] || "";
-      const sfit = sub ? fitText(ctx, sub, BODY_FONT, "600", Math.round(Math.min(rowH * 0.18, 34) * big), 16, tw, 1) : null;
-      const blockH = nfit.lines.length * nfit.size * 1.05 + (sfit ? sfit.size * 1.3 + 6 : 0);
-      ctx.font = `700 ${nfit.size}px ${BODY_FONT}`;
-      let ty = drawStrokedLines(ctx, nfit.lines, nfit.size, tx + tw / 2, yy + (rowH - blockH) / 2,
-        style.nameColor || (dark ? "#FFD54F" : "#8A4B12"), "#000", 0, 1.05);
-      if (sfit) {
-        ctx.font = `600 ${sfit.size}px ${BODY_FONT}`;
-        drawStrokedLines(ctx, sfit.lines, sfit.size, tx + tw / 2, ty + 6, dark ? "#E2E8F0" : "#5C3724", "#000", 0, 1.3);
-      }
-    });
-    if (st.summaryNote) {
-      ctx.font = `700 ${H > 1500 ? 40 : 30}px ${BODY_FONT}`;
-      ctx.textAlign = "center"; ctx.textBaseline = "alphabetic";
-      ctx.fillStyle = dark ? "#FDE68A" : "#8A4B12";
-      ctx.fillText(st.summaryNote, W / 2, H - 46);
+      ctx.lineWidth = style.doctorCardFrame ? 6 : 3;
+      ctx.strokeStyle = style.doctorCardFrame ? style.accent || "#1C64B8" : dark ? "#334155" : "#E6D8C5"; ctx.stroke();
     }
+    if (im) {
+      ctx.drawImage(im, bb.x, bb.y, bb.w, bb.h, cx + inset / 2, y0 + inset / 2, boxW - inset, boxH - inset);
+    } else {
+      ctx.fillStyle = dark ? "#94A3B8" : "#B6A08A";
+      ctx.font = `700 46px ${BODY_FONT}`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.fillText(item.image_url ? "⏳ Đang tải ảnh..." : "🖼️ Chưa có ảnh — bấm để chọn", W / 2, y0 + boxH / 2);
+    }
+    window.LivePreviewRender.lastImageRect = { x: cx, y: y0, w: boxW, h: boxH, H, item: item.i };
+    if (style.doctorCardFrame) {
+      ctx.font = `700 34px ${BODY_FONT}`;
+      const lw = ctx.measureText("✚ BÁC SĨ").width + 40;
+      roundRect(ctx, cx + 20, y0 + 16, lw, 50, 999);
+      ctx.fillStyle = style.accent || "#1C64B8"; ctx.fill();
+      ctx.fillStyle = "#fff"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      ctx.fillText("✚ BÁC SĨ", cx + 20 + lw / 2, y0 + 41);
+    }
+    ctx.font = `700 ${nfit.size}px ${BODY_FONT}`;
+    const strokeW = Math.round(nfit.size * (style.nameStrokeBold ? 0.16 : 0.1));
+    let y = drawStrokedLines(ctx, nfit.lines, nfit.size, W / 2, y0 + boxH + (tall ? 44 : 20),
+      style.nameColor || (dark ? "#FFD54F" : "#8A4B12"), dark ? "#000" : "#FFFFFF", strokeW, 1.06);
+    return drawPills(ctx, item.bullets || [], y + (tall ? 26 : 14), style, tall ? 46 : 34);
   }
 
   window.LivePreviewRender = {
@@ -252,9 +212,11 @@
         drawTitle(ctx, H, st.title || "CHƯA CÓ KỊCH BẢN", "Dán danh sách mục vào ô Kịch bản", st.style);
         return;
       }
-      if (slideIdx >= n) drawSummarySlide(ctx, H, st, redraw);
+      window.LivePreviewRender.lastImageRect = null;
+      if (slideIdx >= n) window.LivePreviewSummary.draw(ctx, H, st, redraw);
       else drawItemSlide(ctx, H, st, st.items[slideIdx], redraw);
     },
-    summaryTitle,
+    // Dùng chung cho live_preview_summary.js
+    helpers: { W, BODY_FONT, loadImage, bboxOf, fitText, roundRect, drawStrokedLines, drawBackground, drawTitle, isDark },
   };
 })();

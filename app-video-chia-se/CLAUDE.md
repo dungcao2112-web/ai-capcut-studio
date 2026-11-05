@@ -121,7 +121,7 @@ Route cũ `upload-doctor-image` / `edit-doctor-image` nhận thêm tuỳ chọn 
 **Chạy & kiểm thử trên Cloud:**
 ```bash
 python3 desktop_app.py --server --port 8765   # tự tạo 2 dự án mẫu khi chạy trên Linux
-python3 -m pytest tests/ -q                    # 45 test, dùng thư mục dự án tạm (không đụng projects/)
+python3 -m pytest tests/ -q                    # 57 test, dùng thư mục dự án tạm (không đụng projects/)
 ```
 
 **Quy tắc khi sửa tiếp:**
@@ -131,3 +131,5 @@ python3 -m pytest tests/ -q                    # 45 test, dùng thư mục dự 
 - Luật phân tích kịch bản nằm ở `backend/services/script_outline.py` và `frontend/modules/script_outline_js.js` (test `test_js_and_python_parsers_agree_and_serialize_roundtrip` bắt buộc 2 bên ra cùng kết quả):
   - **Tiêu đề phụ** (không bắt buộc): ghi rõ `Tiêu đề phụ: ...` hoặc để 1 dòng riêng có ` - ` / `•` / `|` ngay sau tiêu đề (VD `Chất lượng - Xài bền - Kinh tế`). Kịch bản không có => video không có (tiêu đề phụ cũ lấy từ kịch bản tự xoá, `bang.subtitle_source = "script"`).
   - **Định dạng khối**: các mục cách nhau bằng dòng trống, dòng đầu = tên mục, các dòng sau = mô tả.
+- **Ảnh chính to đều**: Bước 6 vẫn ra canvas 800×800 có viền trong suốt; `_sync_remotion_active_props` gắn `image_bbox`/`image_aspect` (services/image_layout.py) để TSX & Live Preview cắt viền và phóng ảnh lấp đầy khoảng trống giữa tiêu đề và tên mục.
+- **🖼️ Khung & 🧩 Ghép ảnh** (`modules/image_cropper.js`, `image_framer.js`, `collage_builder.js`; backend `services/photo_frame.py`, `item_media.py`, `api_routes_media.py`): bấm vào ảnh trên Xem trước / nút "🖼️ Khung" ở bảng mục / thẻ ảnh Bước 3. Ảnh gốc không bị ghi đè (kết quả ở `anh/framed/`, ảnh từng ô ở `anh/gallery/`). Route mới: `GET item-media`, `POST item-frame`, `item-gallery`, `item-gallery-upload` (bytes), `item-gallery-web`.
