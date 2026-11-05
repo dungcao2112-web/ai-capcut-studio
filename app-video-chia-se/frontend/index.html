@@ -1,0 +1,963 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>App Video Chia Sẻ Hội Thoại 2 Người — Sếp Dũng</title>
+  <link rel="icon" type="image/png" href="app_logo.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Anton&family=Baloo+2:wght@700;800&family=Bangers&family=Barlow+Condensed:wght@600;700;800&family=Be+Vietnam+Pro:wght@700;800&family=Chakra+Petch:wght@700&family=Coiny&family=Kanit:wght@700;800&family=Lexend:wght@700;800&family=Mali:wght@700&family=Montserrat:wght@700;800;900&family=Oswald:wght@700&family=Patrick+Hand&family=Paytone+One&family=Phudu:wght@700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <img src="app_logo.png" alt="App Logo" class="app-brand-logo" />
+      <h1>App Video Chia Sẻ Hội Thoại 2 Người</h1>
+      <span class="badge info" id="cliModeBadge">Mặc định: Agy CLI</span>
+      <span class="badge" id="aiUsageBadge">AI: 0 lần gọi</span>
+    </div>
+    <div class="top-actions">
+      <select id="projectSelect" style="width: 230px;" onchange="onSelectProject(this.value)">
+        <option value="">-- Chọn dự án --</option>
+      </select>
+      <div class="preset-pill-group" title="Chọn nhanh Preset bố cục cho dự án hiện tại hoặc tạo dự án theo Preset">
+        <button id="btnTopPresetGioDo" class="preset-pill active" onclick="selectPresetQuick('giodo')">
+          🛒 Preset: Giỏ đồ
+        </button>
+        <button id="btnTopPresetChiaSe" class="preset-pill" onclick="selectPresetQuick('chiase')">
+          💬 Preset: Chia sẻ
+        </button>
+        <button id="btnTopPresetAnhNhac" class="preset-pill" onclick="selectPresetQuick('anh_nhac')" title="Gửi danh sách -> Tự tìm hình ảnh tương ứng từ Web -> Gắn Ảnh + Chữ + Nhạc nền (Không có Voice)">
+          🎵 Preset: Ảnh + Nhạc
+        </button>
+      </div>
+      <button class="success" onclick="createNewBlankProject()" title="Tạo một dự án mới tinh">＋ Dự án mới</button>
+      <button class="warning" onclick="openResetProjectModal()" title="Reset dự án đang mở về Bước 0 hoặc xóa trắng để làm lại">🔄 Reset</button>
+      <button class="danger" onclick="deleteCurrentProjectModal()" title="Xóa dự án đang mở khỏi danh sách">🗑️ Xóa dự án</button>
+      <button onclick="openConfigModal()" title="Cấu hình hệ thống">⚙</button>
+    </div>
+  </header>
+
+  <div class="layout">
+    <!-- Sidebar: 10 Steps + Controls -->
+    <aside class="sidebar">
+      <div style="display:flex; flex-direction:column; gap:6px;">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <strong id="sidebarStepsTitle" style="font-size:13.5px; color:#f8fafc;">Tiến trình 10 bước</strong>
+          <button class="success sm" onclick="runAutoNoGates()" title="Chạy tự động một mạch đến khi xuất xong video">
+            ⚡ Chạy tự động
+          </button>
+        </div>
+        <div style="font-size:11px; color:#94a3b8;">
+          👆 <em>Bấm vào bất kỳ bước nào bên dưới để mở đúng màn hình kiểm tra bước đó</em>
+        </div>
+        <label id="lblStopAtGates" style="display:flex; align-items:center; gap:6px; font-size:11.5px; color:#94a3b8; margin:0; cursor:pointer;">
+          <input type="checkbox" id="chkStopAtGates" style="width:auto;" />
+          Dừng chờ duyệt ở 3 điểm dừng (DỪNG 1, 2, 3)
+        </label>
+      </div>
+      <div id="stepListContainer" class="step-list"></div>
+    </aside>
+
+    <!-- Main Workspace -->
+    <main class="main-area">
+      <!-- Sticky Command & Tab Bar: Always visible when scrolling -->
+      <div class="sticky-command-bar" id="stickyCommandBar">
+        <div class="sticky-nav-row">
+          <nav class="tabs-nav">
+            <button class="tab-btn active" data-tab="tab0" onclick="switchTab('tab0')">
+              0. Nguồn &amp; Kịch bản
+            </button>
+            <button class="tab-btn" data-tab="tab1" onclick="switchTab('tab1')">
+              1. Cắt câu (Bước 2–3)
+            </button>
+            <button class="tab-btn" data-tab="tab2" onclick="switchTab('tab2')">
+              2. Người nghe (Bước 4)
+            </button>
+            <button class="tab-btn" data-tab="tab3" onclick="switchTab('tab3')">
+              3. Ảnh SP &amp; Mẫu (Bước 5–7)
+            </button>
+            <button class="tab-btn" data-tab="tab4" onclick="switchTab('tab4')">
+              4. Xuất Video (Bước 8–10)
+            </button>
+          </nav>
+
+          <div class="sticky-quick-actions">
+            <button class="primary sm" id="btnStickyNext" onclick="runNextStepOrApprove()" title="Chạy bước tiếp theo hoặc duyệt điểm dừng hiện tại">
+              ▶ Bước tiếp theo
+            </button>
+            <button class="success sm" id="btnStickyAutoAll" onclick="runAutoNoGates()" title="Chạy tự động một mạch không cần dừng duyệt">
+              ⚡ Chạy tự động 1 mạch
+            </button>
+            <button class="warning sm" id="btnStickyApplyEdits" onclick="applyEditsAndRebuild()" title="Lưu mọi chỉnh sửa ở màn hình hiện tại và cập nhật lại Timeline">
+              💾 Lưu sửa
+            </button>
+            <button class="sm" id="btnStickyCapCut" style="background:#27272a; border-color:#3f3f46; color:#e4e4e7;" onclick="exportToCapCutDraft(false)" title="Chỉ xuất sang CapCut khi sếp bấm nút này">
+              ✂️ Xuất CapCut (khi cần)
+            </button>
+          </div>
+        </div>
+        <div id="gateBannerContainer"></div>
+      </div>
+
+      <!-- TAB 0: INPUT & SETUP -->
+      <section id="tab0" class="tab-pane">
+        <div class="panel" id="step1Panel">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; flex-wrap:wrap; gap:8px;">
+            <h2 style="margin:0;">Bước 1: Nguồn Video + Kịch Bản + Preset</h2>
+            <div style="display:flex; gap:8px; flex-wrap:wrap;">
+              <button class="primary" onclick="saveProjectSettings()">💾 Lưu thông tin</button>
+              <button class="success" onclick="saveAndStartAutoAll()">⚡ Lưu &amp; Chạy Tự Động (Bước 1→10)</button>
+              <button onclick="saveAndStartStep1()">▶ Chạy từng chặng</button>
+            </div>
+          </div>
+
+          <div class="grid-3" id="step1TopGrid" style="margin-bottom:14px;">
+            <div>
+              <label>Tiêu đề hiển thị trên video (IN HOA)</label>
+              <input type="text" id="inpTitle" placeholder="VD: GIỎ ĐỒ ĐI SINH 1 TR" oninput="updateFontPreview()" />
+            </div>
+            <div>
+              <label>Preset bố cục</label>
+              <select id="inpPreset" onchange="onPresetChange()">
+                <option value="giodo">Preset: Giỏ đồ</option>
+                <option value="chiase">Preset: Chia sẻ</option>
+                <option value="anh_nhac">Preset: Ảnh + Nhạc (Không Voice)</option>
+              </select>
+            </div>
+            <div id="boxAskerSide">
+              <label>Vị trí 2 người (Mặc định: HỎI phải, ĐÁP trái)</label>
+              <div style="display:flex; gap:8px;">
+                <select id="inpAskerSide">
+                  <option value="right">HỎI (A) bên PHẢI — ĐÁP (B) bên TRÁI</option>
+                  <option value="left">HỎI (A) bên TRÁI — ĐÁP (B) bên PHẢI</option>
+                </select>
+                <button onclick="swapAskerSide()" title="Đổi bên HỎI/ĐÁP">⇄ Đổi</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Source Clips Drag & Drop / File Picker -->
+          <div class="grid-3" id="sourceClipsGrid" style="margin-bottom:14px;">
+            <div class="dropzone" id="dropClipA">
+              <label>🎥 Clip Người HỎI (A) — 1080×1920</label>
+              <div style="display:flex; gap:6px; margin-top:4px;">
+                <input type="text" id="inpClipA" placeholder="Kéo thả hoặc Chọn file..." />
+                <button class="primary sm" onclick="pickLocalFile('inpClipA', 'Chọn clip Người HỎI (A)')">📂 Chọn</button>
+              </div>
+              <select id="quickSelectClipA" style="margin-top:6px; font-size:12px;" onchange="onQuickSelectVideo('inpClipA', 'probeBadgeA', this.value)">
+                <option value="">⚡ Chọn nhanh video trong H:\source...</option>
+              </select>
+              <div id="probeBadgeA" class="step-msg" style="margin-top:6px;">Chưa kiểm tra ffprobe</div>
+            </div>
+
+            <div class="dropzone" id="dropClipB">
+              <label>🎥 Clip Người ĐÁP (B) — 1080×1920</label>
+              <div style="display:flex; gap:6px; margin-top:4px;">
+                <input type="text" id="inpClipB" placeholder="Kéo thả hoặc Chọn file..." />
+                <button class="primary sm" onclick="pickLocalFile('inpClipB', 'Chọn clip Người ĐÁP (B)')">📂 Chọn</button>
+              </div>
+              <select id="quickSelectClipB" style="margin-top:6px; font-size:12px;" onchange="onQuickSelectVideo('inpClipB', 'probeBadgeB', this.value)">
+                <option value="">⚡ Chọn nhanh video trong H:\source...</option>
+              </select>
+              <div id="probeBadgeB" class="step-msg" style="margin-top:6px;">Chưa kiểm tra ffprobe</div>
+            </div>
+
+            <div class="dropzone" id="dropClipAux">
+              <label>🎥 Clip Phụ (Tùy chọn cho cảnh nghe)</label>
+              <div style="display:flex; gap:6px; margin-top:4px;">
+                <input type="text" id="inpClipAux" placeholder="Đường dẫn clip phụ (nếu có)..." />
+                <button class="primary sm" onclick="pickLocalFile('inpClipAux', 'Chọn clip phụ người nghe')">📂 Chọn</button>
+              </div>
+              <select id="quickSelectClipAux" style="margin-top:6px; font-size:12px;" onchange="onQuickSelectVideo('inpClipAux', '', this.value)">
+                <option value="">⚡ Chọn nhanh clip phụ trong H:\source...</option>
+              </select>
+              <div class="step-msg" style="margin-top:6px;">Chỉ dùng khi clip chính thiếu cảnh nghe</div>
+            </div>
+          </div>
+
+          <!-- Collapsible Font & AI CLI Settings (Clean & Uncluttered) -->
+          <details class="clean-details" style="margin-bottom:14px;">
+            <summary>⚙️ Tuỳ chỉnh Font chữ (Mặc định: ★ Anton) &amp; AI CLI (Mặc định: Agy CLI)</summary>
+            <div class="details-body">
+              <div class="grid-3" style="margin-bottom:12px; align-items:center;">
+                <div>
+                  <label>🔤 Font chữ Tiêu đề (★ Anton ưa thích)</label>
+                  <select id="inpTitleFont" onchange="onFontSelectChange('title', this.value)">
+                    <option value="Anton">★ Anton (Ưa thích — Chuẩn CapCut, Đậm cao)</option>
+                    <option value="BarlowCondensed">Barlow Condensed (Gọn gàng, hiện đại)</option>
+                    <option value="BeVietnamPro">Be Vietnam Pro (Chuẩn tiếng Việt sắc nét)</option>
+                    <option value="Montserrat">Montserrat (Tròn đầy, sang trọng)</option>
+                    <option value="Oswald">Oswald (Cao khỏe, tiêu đề mạnh)</option>
+                    <option value="Baloo2">Baloo 2 (Bo tròn dễ thương — Mẹ &amp; Bé)</option>
+                    <option value="PaytoneOne">Paytone One (Đậm dày bắt mắt)</option>
+                    <option value="Bangers">Bangers (Hoạt hình năng động)</option>
+                    <option value="Phudu">Phudu (In hoa Việt hóa hiện đại)</option>
+                    <option value="Coiny">Coiny (Bo tròn mập mạp, nổi bật)</option>
+                    <option value="Kanit">Kanit (Hiện đại kiểu TikTok)</option>
+                    <option value="ChakraPetch">Chakra Petch (Góc cạnh cá tính)</option>
+                    <option value="Mali">Mali (Chữ viết tay đáng yêu)</option>
+                    <option value="PatrickHand">Patrick Hand (Viết tay gọn đẹp)</option>
+                    <option value="Lexend">Lexend (Rõ nét, dễ đọc)</option>
+                  </select>
+                </div>
+                <div>
+                  <label>🔤 Font chữ Sản phẩm / Giá / Phụ đề (★ Anton ưa thích)</label>
+                  <select id="inpSubFont" onchange="onFontSelectChange('sub', this.value)">
+                    <option value="Anton">★ Anton (Ưa thích — Chuẩn CapCut, Đậm cao)</option>
+                    <option value="BarlowCondensed">Barlow Condensed (Gọn gàng, hiện đại)</option>
+                    <option value="BeVietnamPro">Be Vietnam Pro (Chuẩn tiếng Việt sắc nét)</option>
+                    <option value="Montserrat">Montserrat (Tròn đầy, sang trọng)</option>
+                    <option value="Oswald">Oswald (Cao khỏe, tiêu đề mạnh)</option>
+                    <option value="Baloo2">Baloo 2 (Bo tròn dễ thương — Mẹ &amp; Bé)</option>
+                    <option value="PaytoneOne">Paytone One (Đậm dày bắt mắt)</option>
+                    <option value="Bangers">Bangers (Hoạt hình năng động)</option>
+                    <option value="Phudu">Phudu (In hoa Việt hóa hiện đại)</option>
+                    <option value="Coiny">Coiny (Bo tròn mập mạp, nổi bật)</option>
+                    <option value="Kanit">Kanit (Hiện đại kiểu TikTok)</option>
+                    <option value="ChakraPetch">Chakra Petch (Góc cạnh cá tính)</option>
+                    <option value="Mali">Mali (Chữ viết tay đáng yêu)</option>
+                    <option value="PatrickHand">Patrick Hand (Viết tay gọn đẹp)</option>
+                    <option value="Lexend">Lexend (Rõ nét, dễ đọc)</option>
+                  </select>
+                </div>
+                <div id="liveFontPreviewBox" style="background:#08090d; border:1px dashed var(--border); border-radius:6px; padding:6px 10px; text-align:center;">
+                  <div id="previewTitleFontText" style="font-family:'Anton', sans-serif; font-size:19px; color:#fff; -webkit-text-stroke:1px #000; letter-spacing:0.5px; line-height:1.15;">GIỎ ĐỒ ĐI SINH 1 TR</div>
+                  <div id="previewSubFontText" style="font-family:'Anton', sans-serif; font-size:14.5px; color:#f87171; margin-top:3px; line-height:1.15;">ÁO NGẮN TAY 3 CÁI — 6x</div>
+                </div>
+              </div>
+
+              <div class="grid-4" id="cliProvidersGrid">
+                <div>
+                  <label>🤖 CLI Bước 3 (Lập cut.json)</label>
+                  <select id="inpStep3Provider">
+                    <option value="agy" selected>Agy CLI (Mặc định)</option>
+                    <option value="codex2">Codex 2 CLI</option>
+                    <option value="codex1">Codex 1 CLI</option>
+                  </select>
+                </div>
+                <div>
+                  <label>👁 CLI Bước 4 (Nhìn ảnh người nghe)</label>
+                  <select id="inpStep4Provider">
+                    <option value="agy" selected>Agy CLI (Mặc định)</option>
+                    <option value="codex2">Codex 2 CLI</option>
+                    <option value="codex1">Codex 1 CLI</option>
+                  </select>
+                </div>
+                <div>
+                  <label>🛍 CLI Bước 6 (Ghép/kiểm ảnh SP)</label>
+                  <select id="inpStep6Provider">
+                    <option value="agy" selected>Agy CLI (Mặc định)</option>
+                    <option value="codex2">Codex 2 CLI</option>
+                    <option value="codex1">Codex 1 CLI</option>
+                  </select>
+                </div>
+                <div>
+                  <label>🔍 CLI Bước 9 (Soát sheet nghiệm thu)</label>
+                  <select id="inpStep9Provider">
+                    <option value="agy" selected>Agy CLI (Mặc định)</option>
+                    <option value="codex2">Codex 2 CLI</option>
+                    <option value="codex1">Codex 1 CLI</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          </details>
+
+          <div class="grid-2">
+            <div>
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px; flex-wrap:wrap; gap:6px;">
+                <label id="lblScriptInput" style="margin:0;">📝 Kịch bản / Danh sách mục (`kich_ban.md`)</label>
+                <button class="sm" onclick="loadSampleBenhVienList()" title="Nạp danh sách mẫu 7. BỆNH VIỆN ĐI SINH (8 bệnh viện)">
+                  🏥 Nạp danh sách 8 Bệnh Viện Đi Sinh
+                </button>
+              </div>
+              <textarea id="inpScript" rows="15" oninput="onScriptInputChanged()" placeholder="Dán kịch bản hội thoại hoặc danh sách mục (VD: 6. KÊNH BÁC SĨ / 7. BỆNH VIỆN ĐI SINH...) vào đây..."></textarea>
+              <div id="scriptAnalysisPreviewBox" style="margin-top:8px; padding:9px 12px; background:#0b111e; border:1px solid #1e293b; border-radius:8px; font-size:12.5px; color:#cbd5e1;">
+                <span style="color:#64748b;">📋 Chưa có kịch bản — dán kịch bản vào ô trên để App tự động phân tích Tiêu đề &amp; đếm số lượng mục ngay tức thì.</span>
+              </div>
+            </div>
+
+            <!-- Right column: Product Table (Preset B), Anh+Nhac Box (Preset C), or 5 Main Points (Preset A) -->
+            <div>
+              <!-- Preset Ảnh + Nhạc Auto Web Image Search Box -->
+              <div id="presetAnhNhacBox" style="display:none; margin-bottom:10px; padding:12px 14px; background:#0d131f; border:1px solid #3b82f6; border-radius:10px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:8px;">
+                  <div>
+                    <strong style="color:#60a5fa; font-size:13.5px;">🎵 Chế độ Ảnh + Chữ + Nhạc Nền (Không Voice — Tự Tìm Ảnh Phù Hợp)</strong>
+                    <div id="anhNhacStatusMsg" class="step-msg" style="margin-top:2px;">
+                      Dán danh sách vào ô bên trái (dòng đầu là Tiêu đề, các dòng dưới là từng mục) rồi bấm nút bên phải để App tự tìm &amp; tải hình ảnh thực tế gán vào từng mục!
+                    </div>
+                  </div>
+                  <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                    <button class="primary sm" onclick="parseAndFetchAnhNhacList(false)">
+                      🔍 Tự tìm &amp; Gắn Hình Ảnh cho danh sách
+                    </button>
+                    <button class="success sm" onclick="parseAndFetchAnhNhacList(true)">
+                      ⚡ Tự tìm Ảnh &amp; Chụp 3 Ảnh Mẫu luôn
+                    </button>
+                  </div>
+                </div>
+                <div class="grid-2" style="gap:10px; margin-top:8px;">
+                  <div>
+                    <label>🎵 File Nhạc nền (.mp3/.wav — Để trống sẽ tự tạo nhạc nền vui tươi)</label>
+                    <div style="display:flex; gap:6px;">
+                      <input type="text" id="inpBgmPath" placeholder="Mặc định: Nhạc nền tự động vui tươi (Có sẵn)" />
+                      <button class="sm" onclick="pickLocalFile('inpBgmPath', 'Chọn file nhạc nền MP3/WAV')">📂 Chọn nhạc</button>
+                    </div>
+                  </div>
+                  <div>
+                    <label>⏱️ Thời lượng hiển thị mỗi hình (giây)</label>
+                    <input type="number" id="inpItemDurationSec" step="0.2" min="1.0" max="10.0" value="2.4" />
+                  </div>
+                </div>
+
+                <!-- Upload Existing Images & Crop/Isolate Doctor Subject Box -->
+                <div
+                  id="doctorUploadAndEditBox"
+                  style="margin-top:10px; padding:10px 12px; background:rgba(16, 185, 129, 0.07); border:1px dashed rgba(16, 185, 129, 0.45); border-radius:8px;"
+                  ondragover="event.preventDefault(); this.style.borderColor='#34d399';"
+                  ondragleave="this.style.borderColor='rgba(16, 185, 129, 0.45)';"
+                  ondrop="onDropDoctorBatchImages(event)"
+                >
+                  <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:6px;">
+                    <div>
+                      <strong style="color:#34d399; font-size:13px;">
+                        ✂️ Tải Ảnh Có Sẵn &amp; Chỉnh Sửa Để Lấy Mỗi Hình Bác Sĩ / Nhân Vật:
+                      </strong>
+                      <div class="step-msg" style="margin-top:2px;">
+                        Nếu sếp đã có sẵn ảnh chụp màn hình kênh TikTok hoặc ảnh bác sĩ còn vướng chữ/nền xung quanh: tải lên tại đây, AI sẽ <b>tự tách/cắt lấy riêng hình bác sĩ</b> (hoặc mở khung kéo cắt tay cho từng mục).
+                      </div>
+                    </div>
+                  </div>
+                  <div style="display:flex; flex-wrap:wrap; gap:8px; align-items:center; justify-content:space-between;">
+                    <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+                      <label style="margin:0; font-size:12px; color:#cbd5e1; white-space:nowrap;">Kiểu lấy hình BS:</label>
+                      <select id="selDoctorEditMode" style="width:auto; min-width:270px; padding:4px 8px; font-size:12px;">
+                        <option value="cutout" selected>👤 Tách nền lấy mỗi hình Bác Sĩ (Có viền trắng nổi bật)</option>
+                        <option value="cutout_card">✨ Tách nền lấy mỗi Bác Sĩ + Đặt lên Thẻ Nền Sáng (Xóa chữ/nền rối)</option>
+                        <option value="crop_card">🖼️ Tự nhận diện &amp; Cắt sát khung hình Bác Sĩ (Giữ nền trong khung)</option>
+                        <option value="cutout_plain">👤 Tách nền lấy mỗi Bác Sĩ (Nền trong suốt thuần — Không viền)</option>
+                      </select>
+                    </div>
+                    <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                      <input
+                        type="file"
+                        id="hiddenDoctorBatchInput"
+                        accept="image/*"
+                        multiple
+                        style="display:none;"
+                        onchange="onSelectDoctorBatchFiles(this)"
+                      />
+                      <button class="success sm" onclick="document.getElementById('hiddenDoctorBatchInput').click()" title="Chọn 1 hoặc nhiều ảnh có sẵn trên máy tính (tự gán theo thứ tự Mục 1 -> N và tách lấy hình bác sĩ)">
+                        📤 Tải ảnh có sẵn lên (1 hoặc nhiều ảnh)
+                      </button>
+                      <button class="primary sm" onclick="openDoctorImageEditorModal(1)" title="Mở cửa sổ Cắt khung & Tách lấy mỗi hình Bác Sĩ cho từng mục">
+                        ✂️ Mở Khung Cắt &amp; Sửa Hình Bác Sĩ Từng Mục
+                      </button>
+                      <button class="sm" onclick="applyDoctorExtractToAllItems()" title="Áp dụng tách lấy mỗi hình bác sĩ cho toàn bộ ảnh hiện có của các mục">
+                        ⚡ Tách lấy hình BS cho tất cả mục
+                      </button>
+                    </div>
+                  </div>
+                  <div id="doctorBatchStatusMsg" style="margin-top:6px; font-size:12px; color:#a7f3d0; display:none;"></div>
+                </div>
+
+                <!-- Custom Request / Prompt Box for Preset Ảnh + Nhạc -->
+                <div style="margin-top:10px; padding-top:10px; border-top:1px dashed rgba(59, 130, 246, 0.35);">
+                  <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px; margin-bottom:6px;">
+                    <label style="margin:0; color:#93c5fd; font-weight:700; font-size:12.5px;">
+                      ✨ Ô Yêu Cầu Thực Hiện Thêm (Nếu cần cho video Ảnh + Nhạc):
+                    </label>
+                    <span class="badge info" style="font-size:11px;">Ctrl+Enter để thực hiện ngay</span>
+                  </div>
+                  <div style="display:flex; flex-wrap:wrap; gap:5px; margin-bottom:6px;">
+                    <span style="font-size:11.5px; color:#94a3b8; align-self:center;">Gợi ý nhanh:</span>
+                    <button class="sm" onclick="insertAnhNhacRequestSnippet('Mỗi hình hiện 3 giây')">+ Mỗi hình 3 giây</button>
+                    <button class="sm" onclick="insertAnhNhacRequestSnippet('Đổi ảnh mục #1 sang ảnh khác')">+ Đổi ảnh mục #1</button>
+                    <button class="sm" onclick="insertAnhNhacRequestSnippet('Tìm lại tất cả ảnh chụp thực tế rõ nét')">+ Tìm lại ảnh thực tế</button>
+                    <button class="sm" onclick="insertAnhNhacRequestSnippet('Phóng to kích thước ảnh 115%')">+ Phóng to ảnh</button>
+                    <button class="sm" onclick="insertAnhNhacRequestSnippet('Đổi dòng chú giải thành (Lưu lại ngay để tham khảo nhé!)')">+ Sửa dòng chú giải</button>
+                    <button class="sm" onclick="insertAnhNhacRequestSnippet('Đổi dòng phụ dưới tiêu đề thành Đa dạng - Kinh tế - Bền đẹp')">+ Sửa dòng phụ tiêu đề</button>
+                  </div>
+                  <textarea
+                    id="inpAnhNhacCustomRequest"
+                    rows="2"
+                    placeholder="Nhập yêu cầu thêm nếu cần (VD: 'Đổi ảnh mục 2 sang ảnh khác', 'Mỗi hình hiện 3 giây', 'Tìm ảnh đồ sơ sinh tông pastel', 'Sửa tiêu đề thành...', 'Thêm ý cho Bora Store: Giao nhanh')..."
+                    style="font-size:13px;"
+                    onkeydown="if((event.ctrlKey || event.metaKey) && event.key === 'Enter'){ event.preventDefault(); applyAnhNhacCustomRequest(false); }"
+                  ></textarea>
+                  <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-top:6px;">
+                    <label style="display:inline-flex; align-items:center; gap:6px; margin:0; font-size:12px; color:#cbd5e1; cursor:pointer;">
+                      <input type="checkbox" id="chkAnhNhacPromptAi" style="width:auto;" checked />
+                      <span>🤖 Dùng Agy CLI phân tích yêu cầu (Mặc định bật)</span>
+                    </label>
+                    <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                      <button id="btnApplyAnhNhacReq" class="primary sm" onclick="applyAnhNhacCustomRequest(false)">
+                        🪄 Thực hiện yêu cầu &amp; Chụp 3 ảnh mẫu
+                      </button>
+                      <button class="success sm" onclick="applyAnhNhacCustomRequest(true)">
+                        🎬 Thực hiện &amp; Xuất Video MP4 luôn
+                      </button>
+                    </div>
+                  </div>
+                  <div id="anhNhacRevisionStatusBox" style="margin-top:6px;"></div>
+                </div>
+              </div>
+
+              <!-- Table Image OCR / Paste Box -->
+              <div class="dropzone" id="dropTableImage" style="margin-bottom:10px; background:#111827; border-color:#0284c7;">
+                <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
+                  <div>
+                    <strong style="color:#38bdf8; font-size:13.5px;">📷 Đọc Bảng Sản Phẩm Mới Từ Ảnh (hoặc Ctrl+V dán ảnh chụp Excel)</strong>
+                    <div id="tableOcrStatus" class="step-msg" style="margin-top:2px;">
+                      Kéo thả ảnh bảng giá vào đây, bấm <b>Ctrl+V</b> để dán ảnh chụp màn hình, hoặc bấm nút chọn ảnh bên phải để AI tự đọc ra bảng mới.
+                    </div>
+                  </div>
+                  <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
+                    <input type="file" id="hiddenTableImgInput" accept="image/*" style="display:none;" onchange="onSelectTableImageFile(this)" />
+                    <button class="primary sm" onclick="document.getElementById('hiddenTableImgInput').click()">
+                      📷 Chọn ảnh Bảng để AI đọc
+                    </button>
+                    <button class="sm" onclick="pickTableImageViaDialog()" title="Mở hộp thoại Windows chọn ảnh bảng">
+                      📂 Đường dẫn ảnh
+                    </button>
+                    <button class="sm" onclick="openPasteExcelModal()" title="Copy các dòng từ Excel rồi dán chữ vào đây">
+                      📋 Dán chữ Excel
+                    </button>
+                    <button class="sm danger" onclick="clearBangTable()" title="Xóa sạch bảng sản phẩm cũ để nhập dự án mới">
+                      🗑 Xóa bảng cũ
+                    </button>
+                  </div>
+                </div>
+                <div id="tableImgPreviewWrap" style="display:none; margin-top:8px; padding-top:8px; border-top:1px solid var(--border); align-items:center; gap:12px;">
+                  <img id="tableImgPreview" src="" alt="Ảnh bảng nguồn" style="max-height:95px; border-radius:6px; border:1px solid var(--border); cursor:zoom-in;" onclick="openImageModal('Ảnh Bảng Sản Phẩm Nguồn', this.src)" />
+                  <div style="font-size:12px; color:#cbd5e1;">
+                    <div>✅ Đã gắn ảnh bảng gốc của dự án (bấm vào ảnh để phóng to đối chiếu).</div>
+                    <button class="sm" style="margin-top:5px;" onclick="reparseCurrentTableImage()">🔄 Cho AI đọc lại ảnh này</button>
+                  </div>
+                </div>
+              </div>
+
+              <div id="presetBConfigBox">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; flex-wrap:wrap; gap:6px;">
+                  <label id="lblBangTableHeader" style="margin:0;">🛒 Bảng sản phẩm (bang.json) &amp; Tuỳ chọn giá</label>
+                  <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                    <label id="lblMaskPriceOpt" style="display:inline-flex; align-items:center; gap:5px; margin:0; color:#fff; cursor:pointer; font-size:12px;">
+                      <input type="checkbox" id="inpMaskPrice" checked />
+                      Che số cuối (`6x K`, giữ `5 K`, tổng `1.13x K`)
+                    </label>
+                    <select id="inpProductDisplayMode" style="width:165px;">
+                      <option value="single">Hiện 1 SP / lần (Chuẩn V7)</option>
+                      <option value="batch5">Hiện 5 SP / lần (Kiểu b8)</option>
+                    </select>
+                    <button class="sm" onclick="addProductRow()">＋ Thêm mục</button>
+                  </div>
+                </div>
+                <div style="max-height:270px; overflow-y:auto; border:1px solid var(--border); border-radius:6px;">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th style="width:34px;">#</th>
+                        <th>Tên gốc</th>
+                        <th>Tên hiển thị (IN HOA)</th>
+                        <th class="col-price-only" style="width:48px;">SL</th>
+                        <th class="col-price-only" style="width:58px;">ĐV</th>
+                        <th class="col-price-only" style="width:64px;">Giá (K)</th>
+                        <th style="width:130px;">Mô tả / Ghi chú</th>
+                        <th style="width:62px;" title="Gắn ảnh riêng">Ảnh</th>
+                        <th style="width:32px;"></th>
+                      </tr>
+                    </thead>
+                    <tbody id="bangTableBody"></tbody>
+                  </table>
+                </div>
+                <div class="grid-3" id="bangSummaryFooterGrid" style="margin-top:8px;">
+                  <div id="boxTotalGia">
+                    <label>Tổng tiền (K)</label>
+                    <input type="number" id="inpTotalGia" value="0" />
+                  </div>
+                  <div>
+                    <label>Dòng chú giải (trong ngoặc đơn)</label>
+                    <input type="text" id="inpSummaryNote" value="(Săn Sell để được giá hời)" />
+                  </div>
+                  <div>
+                    <label>Dòng phụ dưới tổng</label>
+                    <input type="text" id="inpSummarySubtitle" value="ĐỦ CHO MẸ & BÉ ĐI SINH" />
+                  </div>
+                </div>
+              </div>
+
+              <div id="presetAConfigBox" style="display:none;">
+                <label>📋 5 Dòng Bảng Ý Chính (Bố cục A "Chia sẻ" — Anton IN HOA 38px)</label>
+                <textarea id="inpChiaSeItems" rows="8" placeholder="Mỗi dòng 1 ý chính IN HOA..."></textarea>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 1: AUDIO ANALYSIS & STOP GATE 1 (STEP 2 -> STEP 3) -->
+      <section id="tab1" class="tab-pane" style="display:none;">
+        <!-- BƯỚC 2 -->
+        <details id="step2WhisperDetails" class="clean-details" style="margin-bottom:14px;">
+          <summary>📊 Bước 2: Kết quả Phân tích Âm thanh &amp; Phiên âm Whisper (`phien_am_A/B.txt` &amp; `energy_A/B.txt`)</summary>
+          <div class="details-body">
+            <div class="grid-2">
+              <div>
+                <label>Người HỎI (A) — Phiên âm Whisper theo cụm Energy (`[ẢO]` = đoạn Whisper bịa)</label>
+                <pre id="txtPhienAmA" class="code-box"></pre>
+                <label style="margin-top:8px;">Energy Log A (-48 dBFS)</label>
+                <pre id="txtEnergyA" class="code-box" style="max-height:150px;"></pre>
+              </div>
+              <div>
+                <label>Người ĐÁP (B) — Phiên âm Whisper theo cụm Energy</label>
+                <pre id="txtPhienAmB" class="code-box"></pre>
+                <label style="margin-top:8px;">Energy Log B (-48 dBFS)</label>
+                <pre id="txtEnergyB" class="code-box" style="max-height:150px;"></pre>
+              </div>
+            </div>
+          </div>
+        </details>
+
+        <!-- BƯỚC 3 -->
+        <div class="panel" id="step3CutPanel">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; flex-wrap:wrap; gap:8px;">
+            <h2 style="margin:0;">★ Bước 3 (DỪNG 1): Danh Sách Cắt Thoại (`cut.json`)</h2>
+            <div style="display:flex; gap:8px; flex-wrap:wrap;">
+              <button onclick="saveCutJsonOnly()">💾 Lưu cut.json &amp; Tạo lại file nghe thử</button>
+              <button class="success" onclick="approveGate('DUNG_1')">
+                ✅ DUYỆT DỪNG 1 &amp; Chạy tiếp Bước 4
+              </button>
+            </div>
+          </div>
+
+          <div id="joinedVoicePreviewBar" style="background:#0d1017; border:1px solid var(--border); padding:10px 14px; border-radius:8px; margin-bottom:14px; display:flex; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap;">
+            <div>
+              <strong>🔊 Nghe thử toàn bộ Voice đã ghép (1.3x):</strong>
+              <span class="step-msg" style="margin-left:8px;">Ấn Enter trong ô chữ để tách dòng mới; bấm 🔍 Dò giây để cắt lại đúng chữ đã sửa</span>
+            </div>
+            <audio id="joinedAudioPlayer" controls style="height:34px; width:400px;"></audio>
+          </div>
+
+          <div id="cutTurnsContainer"></div>
+
+          <details class="clean-details" style="margin-top:14px;">
+            <summary>🔍 Xem các đoạn bị bỏ (`dropped`), đoạn không chắc (`unsure`) &amp; Công cụ quét mịn</summary>
+            <div class="details-body">
+              <div class="grid-2">
+                <div class="panel" style="margin:0; background:#0c0e14;">
+                  <h3>🗑 Các đoạn bị bỏ (`dropped`) + Lý do</h3>
+                  <div id="droppedListContainer"></div>
+                </div>
+                <div class="panel" style="margin:0; background:#0c0e14;">
+                  <h3>❓ Chỗ không chắc (`unsure`) &amp; Quét mịn (`--gap 0.06`)</h3>
+                  <div id="unsureListContainer" style="margin-bottom:10px;"></div>
+                  <div style="border-top:1px solid var(--border); padding-top:10px;">
+                    <label>Quét lại đoạn Energy liền có câu vấp bên trong (`analyze.py --from --to --gap 0.06`):</label>
+                    <div style="display:flex; gap:6px; align-items:center; margin-top:4px;">
+                      <select id="fineWho" style="width:90px;">
+                        <option value="A">Clip A</option>
+                        <option value="B">Clip B</option>
+                      </select>
+                      <input type="number" step="0.1" id="fineFrom" placeholder="Từ giây" value="0" style="width:90px;" />
+                      <input type="number" step="0.1" id="fineTo" placeholder="Đến giây" value="15" style="width:90px;" />
+                      <input type="number" step="0.01" id="fineGap" value="0.06" style="width:80px;" title="Gap (giây)" />
+                      <button class="primary sm" onclick="runFineAnalyze()">🔍 Quét mịn</button>
+                    </div>
+                    <pre id="fineAnalyzeOutput" class="code-box" style="display:none; margin-top:8px; max-height:140px;"></pre>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </details>
+        </div>
+      </section>
+
+      <!-- TAB 2: LISTENER CANDIDATES & STOP GATE 2 (STEP 4) -->
+      <section id="tab2" class="tab-pane" style="display:none;">
+        <div class="panel" id="step4IdlePanel">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; flex-wrap:wrap; gap:8px;">
+            <h2 style="margin:0;">★ Bước 4 (DỪNG 2): Chọn Cảnh Người Nghe (`idle.json`)</h2>
+            <div style="display:flex; gap:8px; flex-wrap:wrap;">
+              <button onclick="saveIdleChoicesOnly()">💾 Lưu lựa chọn cảnh nghe</button>
+              <button class="success" onclick="approveGate('DUNG_2')">
+                ✅ DUYỆT DỪNG 2 &amp; Chạy tiếp Bước 5→7
+              </button>
+            </div>
+          </div>
+          <p class="step-msg" style="margin-top:0; margin-bottom:12px;">
+            Quy tắc GOOD: Miệng khép, tay yên dưới ngực, mắt nhìn chếch về phía người nói (không nhìn thẳng ống kính). Bấm vào ảnh contact sheet để phóng to.
+          </p>
+
+          <!-- Per-Turn Listener Override Table -->
+          <div style="margin-bottom:16px; background:#0c0e14; padding:12px; border-radius:8px; border:1px solid var(--border);">
+            <h3 style="margin-top:0;">🎯 Bảng phân bổ cảnh người nghe theo từng lượt</h3>
+            <table>
+              <thead>
+                <tr>
+                  <th>Lượt</th>
+                  <th>Người NÓI (luôn giữ clip gốc)</th>
+                  <th>Người NGHE</th>
+                  <th>Chế độ chọn cảnh nghe</th>
+                  <th>Nguồn Clip nghe (Chính / Phụ)</th>
+                  <th>Từ giây</th>
+                  <th>Đến giây</th>
+                  <th>Ghi chú</th>
+                </tr>
+              </thead>
+              <tbody id="turnListenerOverrideBody"></tbody>
+            </table>
+          </div>
+
+          <div class="grid-2">
+            <div>
+              <h3>Ứng viên Người nghe A (khi B đang nói)</h3>
+              <div id="candidatesAContainer" style="display:flex; flex-direction:column; gap:10px;"></div>
+            </div>
+            <div>
+              <h3>Ứng viên Người nghe B (khi A đang nói) &amp; Clip Phụ</h3>
+              <div id="candidatesBContainer" style="display:flex; flex-direction:column; gap:10px;"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 3: TIMELINE, PRODUCTS & REMOTION STILLS (STEP 5 -> STEP 6 -> STEP 7) -->
+      <section id="tab3" class="tab-pane" style="display:none;">
+        <!-- BƯỚC 5: Principle #1 Check Banner -->
+        <div class="panel" id="principle1Panel">
+          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:8px;">
+            <h3 style="margin:0;">🛡 Bước 5: Dựng Timeline &amp; Kiểm tra NGUYÊN TẮC SỐ 1 (Người đang NÓI luôn dùng clip GỐC)</h3>
+            <button class="primary sm" onclick="runSingleStep(5, true)">↻ Chạy lại Bước 5</button>
+          </div>
+          <div id="principle1TableWrap"></div>
+        </div>
+
+        <!-- BƯỚC 6: Product Images Grid -->
+        <div class="panel" id="productsStep6Panel">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; flex-wrap:wrap; gap:8px;">
+            <div>
+              <h3 style="margin:0;">🛍 Bước 6: Ảnh Sản Phẩm Không Nền (`H:\source\san pham`) &amp; Chỉnh Cỡ Từng Món</h3>
+              <div class="step-msg">Chỉnh tỷ lệ to/nhỏ (`%`) riêng cho từng món hoặc đổi ảnh từ thư mục `H:\source\san pham`.</div>
+            </div>
+            <div style="display:flex; gap:8px; flex-wrap:wrap;">
+              <button class="sm primary" onclick="openDoctorImageEditorModal(1)">✂️ Cắt / Tách lấy mỗi hình Bác Sĩ</button>
+              <button class="sm" onclick="applyDoctorExtractToAllItems()">⚡ Tách nền BS tất cả mục</button>
+              <button class="sm" onclick="openPathInExplorer('H:\\\\source\\\\san pham')">📁 Mở `H:\source\san pham`</button>
+              <button class="success sm" onclick="saveAllItemScalesAndRestill()">💾 Lưu cỡ các món &amp; Chụp lại mẫu</button>
+              <button class="sm" onclick="openProductContactSheet()">🖼 Xem Contact Sheet (`_contact.png`)</button>
+              <button class="primary sm" onclick="runSingleStep(6, true)">↻ Chạy lại Bước 6</button>
+            </div>
+          </div>
+          <div id="productCardsContainer" class="product-grid"></div>
+        </div>
+
+        <!-- BƯỚC 7: Stills & Stop Gate 3 -->
+        <div class="panel" id="step7StillsPanel">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; flex-wrap:wrap; gap:8px;">
+            <h2 style="margin:0;">★ Bước 7 (DỪNG 3): Duyệt 3 Ảnh Mẫu Remotion (1080×1080) Trước Khi Render</h2>
+            <div style="display:flex; gap:8px; flex-wrap:wrap;">
+              <button class="primary" onclick="rerunStep7Stills()">📸 Chụp lại 3 ảnh mẫu (Bước 7)</button>
+              <button class="success" onclick="approveGate('DUNG_3')">
+                ✅ DUYỆT DỪNG 3 &amp; Bắt đầu Render Video (Bước 8→10)
+              </button>
+            </div>
+          </div>
+          <p class="step-msg" style="margin-top:0;">
+            Bấm vào từng ảnh mẫu để phóng to 1080×1080 kiểm tra dấu tiếng Việt, vị trí chữ dưới cằm, hai người cân đối.
+          </p>
+
+          <div id="stillsGridContainer" class="grid-3" style="margin-bottom:14px;"></div>
+
+          <!-- Step 7 Prompt Revision Box (edit any text/image/content right inside the 3 preview images) -->
+          <div style="background:#0d1017; padding:12px 14px; border-radius:8px; border:1px solid #3b82f6; margin-bottom:12px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:6px;">
+              <strong style="color:#93c5fd; font-size:14px;">✨ Ô Nhập Prompt Sửa Nội Dung Trong Ảnh Mẫu, Chữ Hiển Thị, Giá &amp; Bố Cục (Bước 7):</strong>
+              <span class="badge info">Ctrl+Enter để áp dụng nhanh</span>
+            </div>
+            <div style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:8px;">
+              <span style="font-size:12px; color:#94a3b8; align-self:center;">Gợi ý nhanh:</span>
+              <button class="sm" onclick="insertStep7PromptSnippet('Bỏ chữ K phía sau giá')">+ Bỏ chữ K sau giá</button>
+              <button class="sm" onclick="insertStep7PromptSnippet('Sửa chữ Săn Sell thành Săn Sale')">+ "Săn Sell" → "Săn Sale"</button>
+              <button class="sm" onclick="insertStep7PromptSnippet('Giá 0 hiện chữ TẶNG')">+ Giá 0 → "TẶNG"</button>
+              <button class="sm" onclick="insertStep7PromptSnippet('Đổi tiêu đề thành GIỎ ĐỒ ĐI SINH 5 TR')">+ Đổi tiêu đề</button>
+              <button class="sm" onclick="insertStep7PromptSnippet('Meji thanh đổi tên thành SỮA MEIJI')">+ Đổi tên SP</button>
+              <button class="sm" onclick="insertStep7PromptSnippet('Bỉm giá 150K')">+ Đổi giá SP</button>
+              <button class="sm" onclick="insertStep7PromptSnippet('Đổi dòng chú giải thành (Săn Sale để được giá hời)')">+ Đổi chú giải đỏ</button>
+              <button class="sm" onclick="insertStep7PromptSnippet('Cỡ ảnh sản phẩm 350px')">+ Đổi cỡ ảnh SP</button>
+              <button class="sm" onclick="insertStep7PromptSnippet('Hiện giá thật')">+ Bỏ che giá / Che giá</button>
+            </div>
+            <textarea id="step7PromptInput" rows="2" placeholder="Nhập nội dung muốn sửa trong 3 ảnh mẫu (cách nhau dấu chấm phẩy hoặc xuống dòng). Ví dụ: Sửa chữ Săn Sell thành Săn Sale; Bỏ chữ K; Giá 0 hiện chữ TẶNG; Cỡ ảnh sản phẩm 360px" style="width:100%; font-size:13.5px; margin-bottom:8px;" onkeydown="if((event.ctrlKey || event.metaKey) && event.key === 'Enter'){ event.preventDefault(); applyStep7Prompt(false); }"></textarea>
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+              <label style="display:flex; align-items:center; gap:6px; margin:0; cursor:pointer; font-size:12.5px;">
+                <input type="checkbox" id="chkUseAiStep7Prompt" style="width:auto;" />
+                <span>🤖 Dùng thêm Agy CLI phân tích nếu câu lệnh phức tạp</span>
+              </label>
+              <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                <button id="btnApplyStep7Prompt" class="primary" onclick="applyStep7Prompt(false)">
+                  🪄 Áp dụng Prompt &amp; Chụp lại 3 ảnh mẫu
+                </button>
+                <button class="success" onclick="applyStep7Prompt(true)">
+                  🎬 Áp dụng Prompt &amp; Render Video (Bước 8→10)
+                </button>
+              </div>
+            </div>
+            <div id="step7RevisionStatusBox" style="margin-top:8px;"></div>
+          </div>
+
+          <!-- Collapsible Live Visual Adjustments Box -->
+          <details class="clean-details">
+            <summary>🎛️ Tinh chỉnh chi tiết Cỡ ảnh sản phẩm, Font chữ &amp; Tọa độ khung người</summary>
+            <div class="details-body">
+              <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:10px;">
+                <strong style="color:#38bdf8;">🖼️ Kích thước &amp; Vị trí Hình ảnh Sản phẩm (trên khung 1080×1080):</strong>
+                <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;">
+                  <span style="font-size:12px; color:#94a3b8;">Chọn nhanh cỡ ảnh:</span>
+                  <button class="sm" onclick="setQuickProductImageSize(280)">Nhỏ (280px)</button>
+                  <button class="sm" onclick="setQuickProductImageSize(340)">Vừa gọn (340px)</button>
+                  <button class="sm primary" onclick="setQuickProductImageSize(400)">Chuẩn (400px)</button>
+                  <button class="sm" onclick="setQuickProductImageSize(460)">To rõ (460px)</button>
+                  <button class="sm" onclick="setQuickProductImageSize(520)">Rất to (520px)</button>
+                </div>
+              </div>
+              <div class="grid-4" style="align-items:end; margin-bottom:12px;">
+                <div style="grid-column: span 2;">
+                  <label>📏 Kích thước Ảnh Sản Phẩm chung (`px`)</label>
+                  <div style="display:flex; gap:10px; align-items:center;">
+                    <input type="range" id="adjProdImgSizeRange" min="180" max="650" step="5" value="400" style="flex:1; cursor:pointer;" oninput="syncProdImgSizeInputs(this.value)" />
+                    <input type="number" id="adjProdImgSize" min="160" max="680" step="5" value="400" style="width:90px; font-weight:700; color:#38bdf8;" oninput="syncProdImgSizeInputs(this.value)" />
+                    <span id="adjProdImgPctBadge" class="badge info">100%</span>
+                  </div>
+                </div>
+                <div>
+                  <label>↔️ Tâm ngang X Ảnh SP (px)</label>
+                  <input type="number" id="adjProdLeftX" value="270" />
+                </div>
+                <div>
+                  <label>↕️ Vị trí dọc Khối SP (Top Y px)</label>
+                  <input type="number" id="adjProdCardTop" value="610" />
+                </div>
+                <div>
+                  <label>🔤 Cỡ chữ Tên SP (px)</label>
+                  <input type="number" id="adjProdNameSize" value="50" />
+                </div>
+                <div>
+                  <label>💰 Cỡ chữ Giá Tiền (px)</label>
+                  <input type="number" id="adjProdPriceSize" value="105" />
+                </div>
+                <div>
+                  <label>↔️ Tâm ngang X Chữ &amp; Giá (px)</label>
+                  <input type="number" id="adjProdRightX" value="810" />
+                </div>
+                <div>
+                  <button class="success" style="width:100%; height:36px; justify-content:center;" onclick="saveVisualAdjustmentsAndRestill()">
+                    ✅ Lưu &amp; Chụp lại mẫu
+                  </button>
+                </div>
+              </div>
+
+              <div class="grid-4" style="margin-bottom:10px; padding-top:10px; border-top:1px dashed var(--border);">
+                <div style="grid-column: span 2;">
+                  <label>🔤 Font chữ Tiêu đề (★ Anton ưa thích)</label>
+                  <select id="adjTitleFont" onchange="onFontSelectChange('title', this.value)">
+                    <option value="Anton">★ Anton (Ưa thích — Chuẩn CapCut, Đậm cao)</option>
+                    <option value="BarlowCondensed">Barlow Condensed (Gọn gàng, hiện đại)</option>
+                    <option value="BeVietnamPro">Be Vietnam Pro (Chuẩn tiếng Việt sắc nét)</option>
+                    <option value="Montserrat">Montserrat (Tròn đầy, sang trọng)</option>
+                    <option value="Oswald">Oswald (Cao khỏe, tiêu đề mạnh)</option>
+                    <option value="Baloo2">Baloo 2 (Bo tròn dễ thương — Mẹ &amp; Bé)</option>
+                    <option value="PaytoneOne">Paytone One (Đậm dày bắt mắt)</option>
+                    <option value="Bangers">Bangers (Hoạt hình năng động)</option>
+                    <option value="Phudu">Phudu (In hoa Việt hóa hiện đại)</option>
+                    <option value="Coiny">Coiny (Bo tròn mập mạp, nổi bật)</option>
+                    <option value="Kanit">Kanit (Hiện đại kiểu TikTok)</option>
+                    <option value="ChakraPetch">Chakra Petch (Góc cạnh cá tính)</option>
+                    <option value="Mali">Mali (Chữ viết tay đáng yêu)</option>
+                    <option value="PatrickHand">Patrick Hand (Viết tay gọn đẹp)</option>
+                    <option value="Lexend">Lexend (Rõ nét, dễ đọc)</option>
+                  </select>
+                </div>
+                <div style="grid-column: span 2;">
+                  <label>🔤 Font chữ Sản phẩm / Giá / Phụ đề (★ Anton ưa thích)</label>
+                  <select id="adjSubFont" onchange="onFontSelectChange('sub', this.value)">
+                    <option value="Anton">★ Anton (Ưa thích — Chuẩn CapCut, Đậm cao)</option>
+                    <option value="BarlowCondensed">Barlow Condensed (Gọn gàng, hiện đại)</option>
+                    <option value="BeVietnamPro">Be Vietnam Pro (Chuẩn tiếng Việt sắc nét)</option>
+                    <option value="Montserrat">Montserrat (Tròn đầy, sang trọng)</option>
+                    <option value="Oswald">Oswald (Cao khỏe, tiêu đề mạnh)</option>
+                    <option value="Baloo2">Baloo 2 (Bo tròn dễ thương — Mẹ &amp; Bé)</option>
+                    <option value="PaytoneOne">Paytone One (Đậm dày bắt mắt)</option>
+                    <option value="Bangers">Bangers (Hoạt hình năng động)</option>
+                    <option value="Phudu">Phudu (In hoa Việt hóa hiện đại)</option>
+                    <option value="Coiny">Coiny (Bo tròn mập mạp, nổi bật)</option>
+                    <option value="Kanit">Kanit (Hiện đại kiểu TikTok)</option>
+                    <option value="ChakraPetch">Chakra Petch (Góc cạnh cá tính)</option>
+                    <option value="Mali">Mali (Chữ viết tay đáng yêu)</option>
+                    <option value="PatrickHand">Patrick Hand (Viết tay gọn đẹp)</option>
+                    <option value="Lexend">Lexend (Rõ nét, dễ đọc)</option>
+                  </select>
+                </div>
+              </div>
+              <div class="grid-4" id="adjPersonCoordsGrid">
+                <div>
+                  <label>Cỡ chữ Tiêu đề (px)</label>
+                  <input type="number" id="adjTitleSize" value="75" />
+                </div>
+                <div>
+                  <label>Vị trí Y Tiêu đề (px)</label>
+                  <input type="number" id="adjTitleTop" value="110" />
+                </div>
+                <div>
+                  <label>Tâm mặt X Người A (cropA)</label>
+                  <input type="number" id="adjCropA" value="329" />
+                </div>
+                <div>
+                  <label>Tâm mặt X Người B (cropB)</label>
+                  <input type="number" id="adjCropB" value="325" />
+                </div>
+                <div>
+                  <label>Scale Người A</label>
+                  <input type="number" step="0.01" id="adjScaleA" value="1.0" />
+                </div>
+                <div>
+                  <label>Scale Người B</label>
+                  <input type="number" step="0.01" id="adjScaleB" value="1.06" />
+                </div>
+                <div>
+                  <label>Top Y Người A (px)</label>
+                  <input type="number" id="adjTopA" value="180" />
+                </div>
+                <div>
+                  <label>Top Y Người B (px)</label>
+                  <input type="number" id="adjTopB" value="215" />
+                </div>
+              </div>
+            </div>
+          </details>
+        </div>
+      </section>
+
+      <!-- TAB 4: RENDER, QA CHECKS & EXPORT (STEP 8 -> STEP 9 -> STEP 10) -->
+      <section id="tab4" class="tab-pane" style="display:none;">
+        <!-- BƯỚC 8: Render Progress -->
+        <div class="panel" id="step8RenderPanel">
+          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+            <h2 style="margin:0;">🎬 Bước 8: Render Video MP4 (CRF 18 + Chuẩn âm -14 LUFS)</h2>
+            <div style="display:flex; gap:8px; flex-wrap:wrap;">
+              <button class="primary" onclick="runSingleStep(8, true)">🎬 Chạy Render MP4 (Bước 8)</button>
+            </div>
+          </div>
+
+          <div id="renderProgressBox" style="margin:12px 0 0 0;">
+            <div style="display:flex; justify-content:space-between; font-size:12.5px;">
+              <span id="renderPhaseLabel">Sẵn sàng render</span>
+              <span id="renderPercentLabel">0%</span>
+            </div>
+            <div class="progress-bar-wrap">
+              <div id="renderProgressFill" class="progress-bar-fill" style="width: 0%;">0%</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- BƯỚC 9: QA Checks -->
+        <div class="panel" id="step9QaPanel">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; flex-wrap:wrap; gap:8px;">
+            <h3 style="margin:0;">📋 Bước 9: Tự Kiểm Toàn Diện (`checks.md`)</h3>
+            <div style="display:flex; gap:8px; flex-wrap:wrap;">
+              <button class="sm" onclick="runSingleStep(9, true)">🔍 Chạy lại Tự kiểm (Bước 9)</button>
+              <button class="sm" onclick="openQaSheet('sheet_1fps_full')">🖼 Sheet 1fps toàn video</button>
+              <button class="sm" onclick="openQaSheet('sheet_2fps_listeners')">🖼 Sheet 2fps người nghe</button>
+            </div>
+          </div>
+          <div id="checksTableContainer" style="margin-bottom:10px;"></div>
+          <details id="step9QaDetails" class="clean-details">
+            <summary>📄 Xem chi tiết nội dung `checks.md`</summary>
+            <div class="details-body">
+              <pre id="checksMdViewer" class="code-box" style="max-height:320px;"></pre>
+            </div>
+          </details>
+        </div>
+
+        <!-- BƯỚC 10: Single Final Video Output + Cleanup + Quick Revision -->
+        <div class="panel" id="step10ExportPanel">
+          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:12px;">
+            <h2 style="margin:0;">✅ Bước 10: Xuất 1 Bản Video Hoàn Chỉnh Duy Nhất</h2>
+            <div style="display:flex; gap:8px; flex-wrap:wrap;">
+              <button class="danger" onclick="cleanupOldRenderedVideos(false)" title="Xóa vĩnh viễn các bản render cũ và bản nén khỏi máy tính, chỉ giữ lại đúng 1 bản hoàn chỉnh mới nhất">
+                🗑️ Xóa các video cũ (Chỉ giữ 1 bản hoàn chỉnh)
+              </button>
+              <button class="success" onclick="openExportFolder()">📂 Mở thư mục H:\source</button>
+              <button style="background:#27272a; border-color:#3f3f46; color:#e4e4e7;" onclick="exportToCapCutDraft(false)" title="Chỉ xuất sang CapCut khi sếp bấm nút này">
+                ✂️ Xuất sang CapCut (khi cần)
+              </button>
+              <button style="background:#27272a; border-color:#3f3f46; color:#e4e4e7;" onclick="syncFromCapCutDraft()" title="Lấy chỉnh sửa từ CapCut về lại App">
+                🔄 Lấy từ CapCut
+              </button>
+            </div>
+          </div>
+
+          <!-- Single Master Video Output -->
+          <div id="exportVideosBox" style="margin-bottom:14px;"></div>
+
+          <!-- Optional CapCut Info (Only shown or exported on demand) -->
+          <div id="capcutDraftBox" style="margin-bottom:14px;"></div>
+
+          <!-- Final Revision Prompt Box -->
+          <div style="background:#0d1017; padding:12px 14px; border-radius:8px; border:1px solid var(--border);">
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:8px;">
+              <strong style="color:#93c5fd; font-size:14px;">✨ Ô Nhập Prompt Chỉnh Sửa Nhanh Ở Bước Cuối</strong>
+              <span class="badge info">Sửa xong bấm Render lại MP4 (hoặc Xuất CapCut nếu cần)</span>
+            </div>
+
+            <div style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:8px;">
+              <span style="font-size:12px; color:var(--text-muted); align-self:center;">Gợi ý nhanh:</span>
+              <button class="sm" onclick="insertRevisionSnippet('Bỏ chữ K phía sau giá')">+ Bỏ chữ K sau giá</button>
+              <button class="sm" onclick="insertRevisionSnippet('Sửa chữ Săn Sell thành Săn Sale')">+ "Săn Sell" → "Săn Sale"</button>
+              <button class="sm" onclick="insertRevisionSnippet('Giá 0 hiện chữ TẶNG')">+ Giá 0 → "TẶNG"</button>
+              <button class="sm" onclick="insertRevisionSnippet('Đổi tiêu đề thành GIỎ ĐỒ ĐI SINH 5 TR')">+ Đổi tiêu đề</button>
+              <button class="sm" onclick="insertRevisionSnippet('Bỉm giá 145K')">+ Đổi giá SP</button>
+              <button class="sm" onclick="insertRevisionSnippet('Tốc độ 1.35x')">+ Đổi tốc độ nói</button>
+              <button class="sm" onclick="insertRevisionSnippet('Cỡ ảnh sản phẩm 350px')">+ Đổi cỡ ảnh SP</button>
+            </div>
+
+            <textarea id="finalRevisionNotesInput" rows="2" placeholder="Nhập nội dung cần sửa (VD: Bỏ chữ K; Sửa Săn Sell thành Săn Sale; Giá 0 hiện chữ TẶNG; Bỉm giá 145K)..." style="width:100%; font-size:13.5px; margin-bottom:10px;"></textarea>
+
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+              <label style="display:flex; align-items:center; gap:6px; margin:0; cursor:pointer; font-size:12.5px;">
+                <input type="checkbox" id="chkUseAiRevision" style="width:auto;" />
+                <span>🤖 Dùng thêm Agy CLI phân tích nếu sửa kịch bản phức tạp</span>
+              </label>
+              <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                <button class="success" onclick="applyFinalRevision(true, false, false)">
+                  🎬 Áp dụng sửa &amp; Render lại Video MP4
+                </button>
+                <button style="background:#27272a; border-color:#3f3f46; color:#e4e4e7;" onclick="applyFinalRevision(false, false, true)">
+                  ✂️ Chỉ áp dụng sửa &amp; Xuất CapCut
+                </button>
+              </div>
+            </div>
+
+            <div id="finalRevisionHistoryBox" style="margin-top:10px;"></div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Image / Log Modal -->
+  <div id="modalBackdrop" class="modal-backdrop" onclick="if(event.target===this) closeModal()">
+    <div class="modal-box">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+        <h3 id="modalTitle" style="margin:0;">Chi tiết</h3>
+        <button onclick="closeModal()">✕ Đóng</button>
+      </div>
+      <div id="modalBody"></div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

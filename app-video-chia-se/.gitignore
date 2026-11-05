@@ -1,0 +1,25 @@
+# Heavy runtime & generated folders (do not upload to GitHub / Claude Cloud)
+projects/
+video_xuat/
+kho_anh_san_pham/
+models/*.onnx
+models/*.pth
+models/*.bin
+backend/capcut_vendor/
+upload_github_claude_cloud/
+
+# Python cache & logs
+__pycache__/
+*.py[cod]
+*$py.class
+*.log
+.agent_logs/
+server_runtime.log
+
+# OS & temporary files
+.DS_Store
+Thumbs.db
+*.tmp
+*.bak
+*.lnk
+AppVideoChiaSe.exe
