@@ -12,6 +12,7 @@ import os
 import re
 import shutil
 import sys
+import threading
 import traceback
 import urllib.parse
 import webbrowser
@@ -58,6 +59,9 @@ from pipeline import (
     save_project_state,
     start_pipeline_background,
 )
+from services.api_routes import dispatch_extra
+from services.image_enhancer import enhance_options_from_request, safe_extract_doctor_subject_image
+from services.project_meta import enrich_projects
 from utils import (
     ffprobe_media,
     list_source_videos,
@@ -160,12 +164,15 @@ class AppRequestHandler(BaseHTTPRequestHandler):
         qs = urllib.parse.parse_qs(parsed.query)
 
         try:
+            if dispatch_extra(self, "GET", path, qs):
+                return
+
             if path == "/api/config":
                 self._send_json({"config": load_config(), "steps_meta": STEP_DEFINITIONS})
                 return
 
             if path == "/api/projects":
-                self._send_json({"projects": list_projects()})
+                self._send_json({"projects": enrich_projects(list_projects())})
                 return
 
             if path == "/api/system/source-videos":
@@ -222,6 +229,9 @@ class AppRequestHandler(BaseHTTPRequestHandler):
         qs = urllib.parse.parse_qs(parsed.query)
 
         try:
+            if dispatch_extra(self, "POST", path, qs):
+                return
+
             if path == "/api/config":
                 body = self._read_json_body()
                 save_config(body)
@@ -741,11 +751,13 @@ class AppRequestHandler(BaseHTTPRequestHandler):
                     raw_path.write_bytes(raw_bytes)
 
                 edited_path = edited_dir / f"item_{item_idx:02d}_doctor.png"
-                res = extract_doctor_subject_image(
+                enh_opts = enhance_options_from_request(body if "application/json" in ctype else qs)
+                res = safe_extract_doctor_subject_image(
                     src_path=raw_path,
                     out_path=edited_path,
                     mode=mode,
                     crop_box=crop_box,
+                    **enh_opts,
                 )
 
                 bang_data = read_json(pdir / "text" / "bang.json", {"items": []})
@@ -838,11 +850,12 @@ class AppRequestHandler(BaseHTTPRequestHandler):
                         if not raw_p:
                             continue
                         ed_p = edited_dir / f"item_{idx_num:02d}_doctor.png"
-                        res_i = extract_doctor_subject_image(
+                        res_i = safe_extract_doctor_subject_image(
                             src_path=raw_p,
                             out_path=ed_p,
                             mode=mode,
                             crop_box=None,
+                            **enhance_options_from_request(body),
                         )
                         b_it["custom_image_path"] = str(ed_p)
                         b_it["doctor_edit_mode"] = mode
@@ -874,11 +887,12 @@ class AppRequestHandler(BaseHTTPRequestHandler):
 
                 out_fname = f"preview_item_{item_idx:02d}.png" if preview_only else f"item_{item_idx:02d}_doctor.png"
                 ed_p = edited_dir / out_fname
-                res = extract_doctor_subject_image(
+                res = safe_extract_doctor_subject_image(
                     src_path=raw_p,
                     out_path=ed_p,
                     mode=mode,
                     crop_box=crop_box,
+                    **enhance_options_from_request(body),
                 )
 
                 if not preview_only:
@@ -1168,7 +1182,16 @@ class AppRequestHandler(BaseHTTPRequestHandler):
 def main() -> None:
     cfg = load_config()
     port = int(cfg.get("port", 8765))
+    if "--port" in sys.argv and sys.argv.index("--port") + 1 < len(sys.argv):
+        port = int(sys.argv[sys.argv.index("--port") + 1])
     host = "127.0.0.1"
+    if "--no-demo" not in sys.argv:
+        try:
+            from services.demo_seed import ensure_demo_projects
+
+            ensure_demo_projects()
+        except Exception as exc:
+            print(f"[Cảnh báo] Không tạo được dự án mẫu: {exc}", flush=True)
     server = ThreadingHTTPServer((host, port), AppRequestHandler)
     url = f"http://{host}:{port}"
     if "--no-browser" not in sys.argv:

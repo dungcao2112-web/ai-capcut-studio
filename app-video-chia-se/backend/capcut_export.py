@@ -34,14 +34,22 @@ if str(VENDOR_DIR / "capcut-deps") not in sys.path:
 if str(VENDOR_DIR / "capcut-draft-importer") not in sys.path:
     sys.path.append(str(VENDOR_DIR / "capcut-draft-importer"))
 
-import pycapcut as cc
-from capcut_draft_importer.portable_import import (
-    _clear_template_timeline_state,
-    _md5_file,
-    _write_id_mapping,
-    _write_local_metadata,
-    _write_project_files,
-)
+try:
+    import pycapcut as cc
+    from capcut_draft_importer.portable_import import (
+        _clear_template_timeline_state,
+        _md5_file,
+        _write_id_mapping,
+        _write_local_metadata,
+        _write_project_files,
+    )
+
+    CAPCUT_EXPORT_AVAILABLE = True
+    CAPCUT_IMPORT_ERROR = ""
+except ImportError as _cc_import_err:  # Cloud/Linux: thư mục capcut_vendor/ không được đóng gói
+    cc = None
+    CAPCUT_EXPORT_AVAILABLE = False
+    CAPCUT_IMPORT_ERROR = str(_cc_import_err)
 
 
 def _uid() -> str:
@@ -83,6 +91,11 @@ def export_project_to_capcut_draft(
     save a local copy in <pdir>/capcut_draft/, and install + register it directly in
     C:\\Users\\Dung\\AppData\\Local\\CapCut\\User Data\\Projects\\com.lveditor.draft
     """
+    if not CAPCUT_EXPORT_AVAILABLE:
+        raise RuntimeError(
+            "Chưa có thư viện xuất CapCut (backend/capcut_vendor/ — pycapcut). "
+            f"Tính năng này chỉ chạy trên máy Windows đã cài đủ. Chi tiết: {CAPCUT_IMPORT_ERROR}"
+        )
     cfg = load_config()
     ffmpeg_exe = cfg["paths"]["ffmpeg_exe"]
     remotion_dir = Path(cfg["paths"]["remotion_dir"])

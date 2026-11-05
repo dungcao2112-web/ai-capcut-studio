@@ -77,7 +77,46 @@ def _enable_dark_titlebar_windows() -> None:
         pass
 
 
+def _parse_cli_args(argv: list[str]) -> dict:
+    """Hỗ trợ: --server (chỉ chạy HTTP server, không mở cửa sổ), --port N, --host H, --no-demo."""
+    opts = {"server": "--server" in argv, "port": None, "host": "127.0.0.1", "seed_demo": "--no-demo" not in argv}
+    for flag, key in (("--port", "port"), ("--host", "host")):
+        if flag in argv:
+            idx = argv.index(flag)
+            if idx + 1 < len(argv):
+                opts[key] = argv[idx + 1]
+    if opts["port"] is not None:
+        opts["port"] = int(opts["port"])
+    return opts
+
+
+def run_headless_server(host: str, port: int, seed_demo: bool = True) -> None:
+    """Chế độ Server thuần (Linux/Claude Cloud): python3 desktop_app.py --server --port 8765"""
+    if seed_demo:
+        try:
+            from services.demo_seed import ensure_demo_projects
+
+            seeded = ensure_demo_projects()
+            if seeded.get("created"):
+                print(f"Đã tạo dự án mẫu: {', '.join(seeded['created'])}", flush=True)
+        except Exception as exc:  # Không bao giờ để lỗi seed chặn server
+            print(f"[Cảnh báo] Không tạo được dự án mẫu: {exc}", flush=True)
+    server = ThreadingHTTPServer((host, port), AppRequestHandler)
+    print(f"Server running at http://{host}:{port}", flush=True)
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        server.server_close()
+
+
 def main() -> None:
+    cli = _parse_cli_args(sys.argv[1:])
+    if cli["server"]:
+        cfg_srv = load_config()
+        run_headless_server(cli["host"], cli["port"] or int(cfg_srv.get("port", 8765)), cli["seed_demo"])
+        return
     if sys.platform == "win32":
         try:
             import ctypes
@@ -85,7 +124,7 @@ def main() -> None:
         except Exception:
             pass
     cfg = load_config()
-    port = int(cfg.get("port", 8765))
+    port = cli["port"] or int(cfg.get("port", 8765))
     host = "127.0.0.1"
     url = f"http://{host}:{port}"
 

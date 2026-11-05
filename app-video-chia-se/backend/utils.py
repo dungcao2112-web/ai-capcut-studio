@@ -49,12 +49,27 @@ def load_config(config_path: Path | None = None) -> dict[str, Any]:
         fb_prod.mkdir(parents=True, exist_ok=True)
         paths["product_images_dir"] = str(fb_prod)
 
+    # Cloud Demo Mode (Linux/Claude Cloud): thay đường dẫn Windows bằng thư mục cục bộ trong app
+    try:
+        from services.cloud_env import apply_cloud_fallbacks
+
+        cfg = apply_cloud_fallbacks(cfg, app_root)
+    except ImportError:
+        pass
+
     return cfg
 
 
 def save_config(cfg: dict[str, Any], config_path: Path | None = None) -> None:
     if config_path is None:
         config_path = Path(__file__).resolve().parents[1] / "config.json"
+    # Không bao giờ ghi đè đường dẫn Windows thật bằng đường dẫn fallback của Cloud
+    try:
+        from services.cloud_env import restore_original_paths
+
+        cfg = restore_original_paths(cfg)
+    except ImportError:
+        pass
     write_json(config_path, cfg)
 
 

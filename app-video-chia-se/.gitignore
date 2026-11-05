@@ -23,3 +23,7 @@ Thumbs.db
 *.bak
 *.lnk
 AppVideoChiaSe.exe
+
+# Cloud Demo Mode (thư mục tạm khi chạy trên Linux/Claude Cloud)
+remotion_starter_cloud/
+.pytest_cache/
