@@ -13,7 +13,8 @@ import numpy as np
 from PIL import Image
 
 
-def content_bbox(path: Path, alpha_threshold: int = 24) -> tuple[list[float], float] | None:
+def content_bbox(path: Path, alpha_threshold: int = 6) -> tuple[list[float], float] | None:
+    """Ngưỡng alpha thấp (6) để lấy trọn cả bóng đổ mờ — cắt ngang bóng sẽ lộ mép chữ nhật trên video."""
     try:
         with Image.open(path) as im:
             rgba = im.convert("RGBA")

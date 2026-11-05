@@ -121,7 +121,7 @@ Route cũ `upload-doctor-image` / `edit-doctor-image` nhận thêm tuỳ chọn 
 **Chạy & kiểm thử trên Cloud:**
 ```bash
 python3 desktop_app.py --server --port 8765   # tự tạo 2 dự án mẫu khi chạy trên Linux
-python3 -m pytest tests/ -q                    # 57 test, dùng thư mục dự án tạm (không đụng projects/)
+python3 -m pytest tests/ -q                    # 62 test, dùng thư mục dự án tạm (không đụng projects/)
 ```
 
 **Quy tắc khi sửa tiếp:**
@@ -133,3 +133,4 @@ python3 -m pytest tests/ -q                    # 57 test, dùng thư mục dự 
   - **Định dạng khối**: các mục cách nhau bằng dòng trống, dòng đầu = tên mục, các dòng sau = mô tả.
 - **Ảnh chính to đều**: Bước 6 vẫn ra canvas 800×800 có viền trong suốt; `_sync_remotion_active_props` gắn `image_bbox`/`image_aspect` (services/image_layout.py) để TSX & Live Preview cắt viền và phóng ảnh lấp đầy khoảng trống giữa tiêu đề và tên mục.
 - **🖼️ Khung & 🧩 Ghép ảnh** (`modules/image_cropper.js`, `image_framer.js`, `collage_builder.js`; backend `services/photo_frame.py`, `item_media.py`, `api_routes_media.py`): bấm vào ảnh trên Xem trước / nút "🖼️ Khung" ở bảng mục / thẻ ảnh Bước 3. Ảnh gốc không bị ghi đè (kết quả ở `anh/framed/`, ảnh từng ô ở `anh/gallery/`). Route mới: `GET item-media`, `POST item-frame`, `item-gallery`, `item-gallery-upload` (bytes), `item-gallery-web`.
+- **Cắt ảnh không mất chữ** (`services/smart_crop.py`): dùng cho Ghép ảnh, đóng khung, và thẻ 4:3 của ảnh web/ảnh chụp (Bước 6). Chọn cửa sổ giữ nhiều chi tiết nhất, không cắt ngang dòng chữ; lệch tỉ lệ > 28% hoặc cắt dòng chữ > 6% => giữ trọn ảnh trên nền mờ. Ảnh web tải về giữ bản gốc `<tên>_goc.png` (Khung/Ghép luôn dùng bản gốc). Ảnh ghép: nền `cream|beige|white|transparent`, viền `white|brown|gold|none`, canvas 1200×1200.

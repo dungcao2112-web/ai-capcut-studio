@@ -134,3 +134,9 @@ body.lp-open .sp-toast-stack { right: 368px; }
 .cb-acts button { padding: 2px 6px !important; min-width: 26px; justify-content: center; }
 #cbCropPanel:not(:empty) { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--sp-border); }
 @media (max-width: 900px) { .fr-grid { grid-template-columns: 1fr; } }
+.cb-styles { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; font-size: 12.5px; color: var(--sp-text-soft); }
+.cb-styles button.on { background: var(--sp-accent-strong) !important; color: #fff !important; border-color: var(--sp-accent) !important; }
+.cb-mode { font-size: 10.5px; color: var(--sp-muted); text-align: center; min-height: 14px; margin-top: 3px; }
+.cb-preview { min-height: 220px; align-items: center; position: relative; }
+.cb-preview img { max-width: 100%; height: auto; }
+.cb-preview.loading::after { content: "⏳ Đang dựng ảnh ghép..."; position: absolute; top: 10px; right: 12px; font-size: 11.5px; background: rgba(255,255,255,.85); padding: 2px 8px; border-radius: 999px; color: #6f5a49; }

@@ -30,7 +30,7 @@ def test_frame_photo_keeps_chosen_aspect():
 
     for aspect, want in (("1:1", 1.0), ("3:4", 0.75), ("16:9", 16 / 9), ("4:3", 4 / 3)):
         canvas = frame_photo(_photo(), crop_box=[0.1, 0.1, 0.6, 0.8], aspect=aspect)
-        assert canvas.size == (800, 800) and canvas.mode == "RGBA"
+        assert canvas.size == (1200, 1200) and canvas.mode == "RGBA"
         tmp = Path(f"/tmp/_frame_{aspect.replace(':', '_')}.png")
         canvas.save(tmp)
         bbox, ar = content_bbox(tmp)
@@ -47,8 +47,8 @@ def test_collage_layouts(layout, n):
     from services.photo_frame import LAYOUTS, compose_collage
 
     assert len(LAYOUTS[layout][1]) == n
-    canvas = compose_collage([_photo(color=(30 * k, 80, 120)) for k in range(n - 1)], layout)  # 1 ô để trống
-    assert canvas.size == (800, 800)
+    canvas, infos = compose_collage([_photo(color=(30 * k, 80, 120)) for k in range(n - 1)], layout)  # 1 ô để trống
+    assert canvas.size == (1200, 1200) and len(infos) == n and infos[-1]["mode"] == "empty"
     with pytest.raises(ValueError):
         compose_collage([], "khong-co")
 
@@ -118,3 +118,83 @@ def test_remotion_props_carry_bbox_and_tsx_uses_it(api, fresh_demo):
     assert len(p0["image_bbox"]) == 4 and p0["image_aspect"] > 1
     tsx = (APP / "remotion" / "ConvoAppDynamic.tsx").read_text(encoding="utf-8")
     assert "item.image_bbox" in tsx and "maxBoxW" in tsx
+
+
+def _text_photo(w, h, top_text_rows=(0.03, 0.12)):
+    """Ảnh có dải chữ đậm sát mép trên (giống 'Hộp đựng thức ăn cho bé') + sản phẩm phẳng ở giữa."""
+    im = Image.new("RGB", (w, h), (245, 240, 232))
+    a = np.asarray(im).copy()
+    y1, y2 = int(top_text_rows[0] * h), int(top_text_rows[1] * h)
+    rng = np.random.default_rng(1)
+    a[y1:y2, int(w * 0.05):int(w * 0.95)] = (rng.random((y2 - y1, int(w * 0.95) - int(w * 0.05), 1)) > 0.5) * 200
+    a[int(h * 0.35):int(h * 0.85), int(w * 0.3):int(w * 0.7)] = (150, 190, 230)
+    return Image.fromarray(a.astype("uint8"))
+
+
+def test_smart_crop_keeps_top_text_instead_of_center():
+    from services.smart_crop import best_crop
+
+    im = _text_photo(1000, 1000)
+    (x1, y1, x2, y2), loss = best_crop(im, 1.6)  # khung ngang => phải bỏ ~37% chiều cao
+    assert y1 <= 25, "Phải giữ dải chữ ở mép trên (cắt giữa sẽ bắt đầu từ y≈187)"
+    assert abs((x2 - x1) / (y2 - y1) - 1.6) < 0.02
+
+
+def test_fit_tile_contains_when_aspect_mismatch_is_large():
+    from services.smart_crop import fit_tile
+
+    tile, info = fit_tile(_text_photo(800, 1200), 600, 400)  # ảnh dọc vào ô ngang
+    assert tile.size == (600, 400) and info["mode"] == "contain"
+    tile, info = fit_tile(_text_photo(1000, 900), 600, 450)
+    assert info["mode"] == "smart_crop"
+    tile, info = fit_tile(_text_photo(1000, 900), 600, 450, crop_box=[0, 0, 1, 1])
+    assert info["mode"] == "manual"
+
+
+def test_collage_styles_and_preview_api(api, fresh_demo):
+    from services.photo_frame import compose_collage
+
+    _c, infos = compose_collage([_photo()], "2-ngang", {"bg": "beige", "border": "brown"})
+    with pytest.raises(ValueError):
+        compose_collage([_photo()], "2-ngang", {"bg": "tim", "border": "white"})
+    pid = "7-benh-vien-di-sinh-demo"
+    st, info = api.get(f"/api/projects/{pid}/item-media?item_index=1")
+    assert info["styles"]["border"] == ["white", "brown", "gold", "none"] and info["collage_style"]["bg"] == "cream"
+    body = {"item_index": 1, "layout": "2-ngang", "slots": [{"path": info["source_path"]}], "style": {"bg": "white", "border": "gold"}, "preview_only": True}
+    st, prev = api.post(f"/api/projects/{pid}/item-gallery", body)
+    assert st == 200 and prev["preview_only"] and "_preview" in prev["preview_url"] and "project" not in prev
+    st, after = api.get(f"/api/projects/{pid}/item-media?item_index=1")
+    assert after["layout"] == "1"  # xem trước không thay đổi dự án
+    body.pop("preview_only")
+    st, done = api.post(f"/api/projects/{pid}/item-gallery", body)
+    it = next(i for i in done["project"]["bang"]["items"] if i["i"] == 1)
+    assert it["collage_style"] == {"bg": "white", "border": "gold"}
+
+
+def test_web_download_keeps_original_and_source_prefers_it(tmp_path, fresh_demo):
+    from pipeline import get_project_dir
+    from services.item_media import original_of, resolve_source
+
+    framed = tmp_path / "item_01_web0.png"
+    Image.new("RGBA", (800, 800)).save(framed)
+    _photo().save(tmp_path / "item_01_web0_goc.png")
+    assert original_of(framed).name == "item_01_web0_goc.png"
+    src = resolve_source(get_project_dir("7-benh-vien-di-sinh-demo"), {"i": 1, "custom_image_path": str(framed)})
+    assert src.name == "item_01_web0_goc.png"
+    media_ops = (APP / "backend" / "media_ops.py").read_text(encoding="utf-8")
+    assert '"original_path": str(original_path)' in media_ops and "rgba.width in (800, 1200)" in media_ops
+
+
+def test_full_width_headline_is_never_cut_on_the_sides():
+    from services.smart_crop import crop_report, fit_tile
+
+    im = Image.new("RGB", (1400, 800), (230, 245, 230))
+    a = np.asarray(im).copy()
+    rng = np.random.default_rng(3)
+    a[30:110, 20:1380] = (rng.random((80, 1360, 1)) > 0.5) * 40  # dòng chữ dài gần hết chiều ngang
+    a[300:760, 900:1100] = (60, 40, 30)
+    im = Image.fromarray(a.astype("uint8"))
+    rep = crop_report(im, 1.4)
+    assert rep["dense_cut"] > 0.06
+    _tile, info = fit_tile(im, 560, 400)
+    assert info["mode"] == "contain"

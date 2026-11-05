@@ -33,6 +33,13 @@ def _item(bang: dict[str, Any], idx: int) -> dict[str, Any]:
     return it
 
 
+def original_of(path: str | Path) -> Path:
+    """Ảnh web đã đóng thẻ 4:3 có bản gốc chưa cắt '<tên>_goc.png' bên cạnh => luôn ưu tiên bản gốc."""
+    p = Path(path)
+    goc = p.with_name(p.stem + "_goc.png")
+    return goc if goc.is_file() else p
+
+
 def resolve_source(pdir: Path, item: dict[str, Any]) -> Path | None:
     """Ảnh gốc để chọn khung: ảnh mới nhất người dùng/web gán (không phải ảnh do app tạo ra)."""
     from utils import read_json
@@ -49,7 +56,7 @@ def resolve_source(pdir: Path, item: dict[str, Any]) -> Path | None:
         cands.append(str(pdir / "anh" / "products" / str(pr["image_file"])))
     for s in cands:
         if s and Path(s).is_file() and not any(d in Path(s).parts for d in GENERATED_DIRS):
-            return Path(s)
+            return original_of(s)
     return None
 
 
@@ -68,7 +75,7 @@ def _safe_path(pdir: Path, item: dict[str, Any], path: str) -> Path:
 
 
 def item_media_info(pid: str, pdir: Path, idx: int) -> dict[str, Any]:
-    from services.photo_frame import layouts_payload
+    from services.photo_frame import DEFAULT_STYLE, layouts_payload, styles_payload
 
     it = _item(_load(pdir), idx)
     src = resolve_source(pdir, it)
@@ -84,7 +91,8 @@ def item_media_info(pid: str, pdir: Path, idx: int) -> dict[str, Any]:
     return {"ok": True, "item_index": idx, "name": it.get("display_name") or it.get("ten") or "",
             "source_path": str(src) if src else "", "source_url": _file_url(pid, str(src)) if src else "",
             "source_size": size, "crop_box": it.get("image_crop_box"), "aspect": it.get("image_aspect") or "free",
-            "layout": it.get("collage_layout") or "1", "gallery": gallery, "layouts": layouts_payload()}
+            "layout": it.get("collage_layout") or "1", "gallery": gallery, "layouts": layouts_payload(),
+            "styles": styles_payload(), "collage_style": dict(DEFAULT_STYLE, **(it.get("collage_style") or {}))}
 
 
 def _save_and_apply(pid: str, pdir: Path, bang: dict[str, Any], it: dict[str, Any], canvas: Image.Image, name: str) -> dict[str, Any]:
@@ -126,33 +134,41 @@ def frame_item(pid: str, pdir: Path, idx: int, crop_box: list[float] | None, asp
     return _save_and_apply(pid, pdir, bang, it, canvas, "frame")
 
 
-def set_gallery(pid: str, pdir: Path, idx: int, layout: str, slots: list[dict[str, Any]]) -> dict[str, Any]:
-    """🧩 Ghép nhiều ảnh: slots = [{path, crop_box}] theo thứ tự ô của bố cục."""
-    from services.photo_frame import LAYOUTS, apply_crop, compose_collage
+def set_gallery(pid: str, pdir: Path, idx: int, layout: str, slots: list[dict[str, Any]],
+                style: dict[str, Any] | None = None, preview_only: bool = False) -> dict[str, Any]:
+    """🧩 Ghép nhiều ảnh: slots = [{path, crop_box}] theo thứ tự ô. preview_only => chỉ dựng ảnh xem trước."""
+    from services.photo_frame import DEFAULT_STYLE, LAYOUTS, compose_collage
 
     if layout not in LAYOUTS:
         raise ValueError(f"Bố cục không hợp lệ: {layout}")
     bang = _load(pdir)
     it = _item(bang, idx)
     n = len(LAYOUTS[layout][1])
-    clean, images = [], []
+    clean, images, crops = [], [], []
     for s in (slots or [])[:n]:
         path = str((s or {}).get("path") or "")
         if not path:
             clean.append({"path": "", "crop_box": None})
             images.append(None)
+            crops.append(None)
             continue
         p = _safe_path(pdir, it, path)
         with Image.open(p) as im:
-            images.append(apply_crop(im.convert("RGB"), s.get("crop_box")))
+            images.append(im.convert("RGB"))
         clean.append({"path": str(p), "crop_box": s.get("crop_box")})
-    if not any(images):
+        crops.append(s.get("crop_box"))
+    if not any(x is not None for x in images):
         raise ValueError("Chưa có ảnh nào trong các ô ghép.")
-    canvas = compose_collage(images, layout)
-    it.update({"collage_layout": layout, "gallery": clean})
+    st = dict(DEFAULT_STYLE, **(style or {}))
+    canvas, infos = compose_collage(images, layout, st, crops)
+    if preview_only:
+        out = pdir / "anh" / "framed" / "_preview" / f"item_{idx:02d}_collage.png"
+        out.parent.mkdir(parents=True, exist_ok=True)
+        canvas.resize((600, 600), Image.Resampling.LANCZOS).save(out)
+        return {"ok": True, "preview_only": True, "preview_url": _file_url(pid, str(out)), "slots_info": infos}
+    it.update({"collage_layout": layout, "gallery": clean, "collage_style": st})
     res = _save_and_apply(pid, pdir, bang, it, canvas, "collage")
-    res["filled_slots"] = sum(1 for x in images if x is not None)
-    res["total_slots"] = n
+    res.update({"filled_slots": sum(1 for x in images if x is not None), "total_slots": n, "slots_info": infos})
     return res
 
 
@@ -182,24 +198,46 @@ def save_slot_upload(pid: str, pdir: Path, idx: int, slot: int, filename: str, r
     return {"ok": True, "slot": slot, "path": str(out), "url": _file_url(pid, str(out))}
 
 
-def fetch_slot_web(pid: str, pdir: Path, idx: int, slot: int, candidate_index: int, custom_query: str = "") -> dict[str, Any]:
+def fetch_slot_web(pid: str, pdir: Path, idx: int, slot: int, candidate_index: int, custom_query: str = "",
+                   layout: str = "", tries: int = 3) -> dict[str, Any]:
+    """Tải ảnh web cho 1 ô: thử `tries` ứng viên liên tiếp, chọn ảnh HỢP Ô NHẤT (ít bị cắt chữ/nội dung)."""
     from media_ops import download_web_image_for_item
+    from services.photo_frame import LAYOUTS
+    from services.smart_crop import fit_score
     from utils import read_json, write_json
 
     bang = _load(pdir)
     it = _item(bang, idx)
     proj = read_json(pdir / "project.json", {}) or {}
-    out = pdir / "anh" / "gallery" / f"item_{idx:02d}_slot{slot}_web{candidate_index}.png"
-    out.parent.mkdir(parents=True, exist_ok=True)
-    dl = download_web_image_for_item(item_name=str(it.get("display_name") or it.get("ten") or ""),
-                                     project_title=str(proj.get("title") or ""), out_path=out,
-                                     candidate_index=int(candidate_index), custom_query=custom_query)
-    if not dl.get("ok") or not dl.get("path"):
-        return {"ok": False, "error": dl.get("error") or "Không tải được ảnh web (kiểm tra kết nối mạng)."}
+    ratio, cells = LAYOUTS.get(layout) or LAYOUTS["1"]
+    c = cells[min(slot, len(cells) - 1)]
+    aspect = (c[2] * ratio) / c[3]
+    best: tuple[float, Path, int] | None = None
+    tried = []
+    for k in range(max(1, tries)):
+        cand = int(candidate_index) + k
+        out = pdir / "anh" / "gallery" / f"item_{idx:02d}_slot{slot}_web{cand}.png"
+        out.parent.mkdir(parents=True, exist_ok=True)
+        dl = download_web_image_for_item(item_name=str(it.get("display_name") or it.get("ten") or ""),
+                                         project_title=str(proj.get("title") or ""), out_path=out,
+                                         candidate_index=cand, custom_query=custom_query)
+        if not dl.get("ok"):
+            continue
+        src = Path(dl.get("original_path") or dl["path"])
+        with Image.open(src) as im:
+            score = fit_score(im, aspect)
+        tried.append({"candidate_index": cand, "score": score})
+        if best is None or score > best[0]:
+            best = (score, src, cand)
+        if score >= 0.95:
+            break
+    if best is None:
+        return {"ok": False, "error": "Không tải được ảnh web (kiểm tra kết nối mạng)."}
     gal = list(it.get("gallery") or [])
     while len(gal) <= slot:
         gal.append({"path": "", "crop_box": None})
-    gal[slot] = {"path": str(dl["path"]), "crop_box": None}
+    gal[slot] = {"path": str(best[1]), "crop_box": None}
     it["gallery"] = gal
     write_json(pdir / "text" / "bang.json", bang)
-    return {"ok": True, "slot": slot, "path": str(dl["path"]), "url": _file_url(pid, str(dl["path"]))}
+    return {"ok": True, "slot": slot, "path": str(best[1]), "url": _file_url(pid, str(best[1])),
+            "candidate_index": best[2], "fit_score": best[0], "tried": tried}

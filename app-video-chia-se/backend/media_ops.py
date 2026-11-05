@@ -1503,7 +1503,7 @@ def match_and_prepare_products(
                 is_opaque_photo = float(np.mean(a_raw < 245)) < 0.02
                 if is_opaque_photo:
                     canvas = frame_scene_photo_as_card(rgba, target_box=800)
-                elif rgba.size == (800, 800) and (
+                elif rgba.width == rgba.height and rgba.width in (800, 1200) and (
                     bool(item.get("is_scene_photo"))
                     or bool(item.get("is_doctor_cutout"))
                     or "doctor_edited" in str(chosen_src)
@@ -2077,19 +2077,20 @@ def frame_scene_photo_as_card(im: Image.Image, target_box: int = 800) -> Image.I
 
     rgb = im.convert("RGB")
     card_w, card_h = 720, 540
-    # Center-crop to 4:3 aspect ratio
-    src_w, src_h = rgb.size
-    target_ratio = card_w / card_h
-    src_ratio = src_w / max(1, src_h)
-    if src_ratio > target_ratio:
-        new_w = int(round(src_h * target_ratio))
-        left = (src_w - new_w) // 2
-        rgb = rgb.crop((left, 0, left + new_w, src_h))
-    else:
-        new_h = int(round(src_w / target_ratio))
-        top = (src_h - new_h) // 2
-        rgb = rgb.crop((0, top, src_w, top + new_h))
+    # Cắt thông minh về 4:3 (giữ chữ/logo/sản phẩm) — mất nhiều chi tiết quá thì giữ trọn ảnh trên nền mờ
+    try:
+        from services.smart_crop import fit_tile
 
+        rgb, _fit_info = fit_tile(rgb, card_w, card_h, None)
+    except ImportError:
+        src_w, src_h = rgb.size
+        target_ratio = card_w / card_h
+        if src_w / max(1, src_h) > target_ratio:
+            new_w = int(round(src_h * target_ratio))
+            rgb = rgb.crop(((src_w - new_w) // 2, 0, (src_w - new_w) // 2 + new_w, src_h))
+        else:
+            new_h = int(round(src_w / target_ratio))
+            rgb = rgb.crop((0, (src_h - new_h) // 2, src_w, (src_h - new_h) // 2 + new_h))
     rgb = rgb.resize((card_w, card_h), Image.Resampling.LANCZOS)
 
     canvas = Image.new("RGBA", (target_box, target_box), (0, 0, 0, 0))
@@ -2169,7 +2170,11 @@ def download_web_image_for_item(
                     framed = frame_scene_photo_as_card(im, target_box=800)
                     out_path.parent.mkdir(parents=True, exist_ok=True)
                     framed.save(out_path)
+                    # Giữ ẢNH GỐC tải về (chưa cắt) để Chọn khung / Ghép ảnh không bị cắt 2 lần mất chữ
+                    original_path = out_path.with_name(out_path.stem + "_goc.png")
+                    im.convert("RGB").save(original_path)
                     return {
+                        "original_path": str(original_path),
                         "ok": True,
                         "query": query,
                         "path": str(out_path),
