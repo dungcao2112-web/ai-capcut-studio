@@ -68,6 +68,14 @@ def _fill_holes(mask: np.ndarray) -> np.ndarray:
     return mask | (inv & ~outside)
 
 
+def _running_median(profile: np.ndarray, k: int = 15) -> np.ndarray:
+    """Median trượt theo chiều dọc (loại ngoại lai khi chủ thể chạm mép trong đoạn ngắn)."""
+    pad = k // 2
+    padded = np.pad(profile, ((pad, pad), (0, 0)), mode="edge")
+    win = np.lib.stride_tricks.sliding_window_view(padded, k, axis=0)
+    return np.median(win, axis=-1).astype(np.float32)
+
+
 def fallback_subject_mask(rgb: Image.Image) -> tuple[np.ndarray, tuple[int, int, int, int] | None]:
     """Trả về (alpha uint8 HxW, bbox xyxy) giống compute_human_segmentation_mask."""
     W, H = rgb.size
@@ -75,26 +83,22 @@ def fallback_subject_mask(rgb: Image.Image) -> tuple[np.ndarray, tuple[int, int,
     sw, sh = max(8, int(round(W * scale))), max(8, int(round(H * scale)))
     small = np.asarray(rgb.convert("RGB").resize((sw, sh), Image.Resampling.BILINEAR), dtype=np.float32)
     bw = max(2, int(round(min(sw, sh) * 0.04)))
-    # Ảnh chân dung thường bị cắt ở mép dưới (vai/áo chạm đáy) => ước lượng nền từ viền trên/trái/phải
-    border = np.concatenate([
-        small[:bw].reshape(-1, 3),
-        small[: int(sh * 0.8), :bw].reshape(-1, 3), small[: int(sh * 0.8), -bw:].reshape(-1, 3),
-    ])
-    quant = (border // 32).astype(np.int32)
-    keys = quant[:, 0] * 64 + quant[:, 1] * 8 + quant[:, 2]
-    uniq, counts = np.unique(keys, return_counts=True)
-    palette = []
-    for k in uniq[np.argsort(-counts)][:4]:
-        sel = border[keys == k]
-        if len(sel) >= max(3, len(border) * 0.04):
-            palette.append(np.median(sel, axis=0))
-    if not palette:
-        palette = [np.median(border, axis=0)]
-    dist = np.min(np.stack([np.linalg.norm(small - c, axis=2) for c in palette]), axis=0)
-    border_dist = np.min(np.stack([np.linalg.norm(border - c, axis=1) for c in palette]), axis=0)
+    # Mô hình nền THEO TỪNG HÀNG: nội suy giữa viền trái & phải của chính hàng đó (làm mượt theo chiều dọc)
+    # => xử lý tốt nền gradient & áo blouse trắng trên nền sáng (bảng màu toàn cục dễ nhầm áo là nền)
+    left = _running_median(np.median(small[:, :bw], axis=1))
+    right = _running_median(np.median(small[:, -bw:], axis=1))
+    t = np.linspace(0.0, 1.0, sw, dtype=np.float32)[None, :, None]
+    bg_rows = left[:, None, :] * (1 - t) + right[:, None, :] * t
+    dist_rows = np.linalg.norm(small - bg_rows, axis=2)
+    # Vùng trên cùng: so thêm với viền trên theo từng cột (nền thay đổi theo chiều ngang)
+    top = np.median(small[:bw], axis=0)
+    dist_top = np.linalg.norm(small - top[None, :, :], axis=2)
+    w_top = np.clip(1.0 - np.arange(sh, dtype=np.float32) / max(1.0, sh * 0.25), 0, 1)[:, None]
+    dist = dist_rows * (1 - w_top) + np.minimum(dist_rows, dist_top) * w_top
+    resid = np.concatenate([dist_rows[: int(sh * 0.8), :bw].ravel(), dist_rows[: int(sh * 0.8), -bw:].ravel(), dist_top[:bw].ravel()])
     # Độ nhiễu nền: p90 (bỏ qua logo/chữ nhỏ chạm viền) — không để vùng tóc tối kéo ngưỡng Otsu lên
-    noise = float(np.percentile(border_dist, 90))
-    thr = float(np.clip(noise * 1.6 + 8.0, 18.0, min(60.0, max(20.0, _otsu(dist)))))
+    noise = float(np.percentile(resid, 90))
+    thr = float(np.clip(noise * 1.6 + 8.0, 14.0, min(60.0, max(20.0, _otsu(dist)))))
     fg = dist > thr
     labels, areas = _components(fg)
     if areas:
@@ -120,7 +124,9 @@ def fallback_extract_subject(
     mode: str = "cutout",
     crop_box: list[float] | None = None,
     target_box: int = 800,
+    mask_src_path: Path | None = None,
 ) -> dict[str, Any]:
+    """mask_src_path: ảnh gốc (chưa làm nét) dùng để tính mặt nạ — điểm ảnh vẫn lấy từ src_path."""
     from media_ops import frame_scene_photo_as_card
 
     with Image.open(src_path) as raw:
@@ -137,7 +143,17 @@ def fallback_extract_subject(
             x2, y2 = min(ow, int(round((cx + cw) * ow))), min(oh, int(round((cy + ch) * oh)))
             if x2 - x1 >= 10 and y2 - y1 >= 10 and (x1, y1, x2, y2) != (0, 0, ow, oh):
                 work, manual = work.crop((x1, y1, x2, y2)), True
-    alpha, bbox = fallback_subject_mask(work)
+    mask_img = work
+    if mask_src_path is not None and Path(mask_src_path) != Path(src_path):
+        with Image.open(mask_src_path) as m_raw:
+            m_rgba = m_raw.convert("RGBA")
+        if m_rgba.size == orig.size:
+            m_white = Image.new("RGBA", m_rgba.size, (255, 255, 255, 255))
+            m_white.alpha_composite(m_rgba)
+            mask_img = m_white.convert("RGB")
+            if manual:
+                mask_img = mask_img.crop((x1, y1, x2, y2))
+    alpha, bbox = fallback_subject_mask(mask_img)
     w, h = work.size
 
     if mode == "crop_card":

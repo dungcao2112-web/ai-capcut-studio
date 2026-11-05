@@ -215,7 +215,8 @@ def safe_extract_doctor_subject_image(
         from services.subject_fallback import fallback_extract_subject
 
         engine, fallback_reason = "fallback", f"{type(exc).__name__}: {exc}"[:240]
-        res = fallback_extract_subject(work_src, out_path, mode=mode, crop_box=crop_box, target_box=target_box)
+        res = fallback_extract_subject(work_src, out_path, mode=mode, crop_box=crop_box, target_box=target_box,
+                                       mask_src_path=src_path)
     bg_hex = resolve_card_bg(card_bg) if card_bg is not None else None
     if card_bg is not None and bg_hex is not None and mode in ("cutout", "cutout_plain"):
         with Image.open(out_path) as done:
