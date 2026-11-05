@@ -121,7 +121,7 @@ Route cũ `upload-doctor-image` / `edit-doctor-image` nhận thêm tuỳ chọn 
 **Chạy & kiểm thử trên Cloud:**
 ```bash
 python3 desktop_app.py --server --port 8765   # tự tạo 2 dự án mẫu khi chạy trên Linux
-python3 -m pytest tests/ -q                    # 62 test, dùng thư mục dự án tạm (không đụng projects/)
+python3 -m pytest tests/ -q                    # 71 test, dùng thư mục dự án & kho ảnh tạm (không đụng projects/)
 ```
 
 **Quy tắc khi sửa tiếp:**
@@ -134,3 +134,4 @@ python3 -m pytest tests/ -q                    # 62 test, dùng thư mục dự 
 - **Ảnh chính to đều**: Bước 6 vẫn ra canvas 800×800 có viền trong suốt; `_sync_remotion_active_props` gắn `image_bbox`/`image_aspect` (services/image_layout.py) để TSX & Live Preview cắt viền và phóng ảnh lấp đầy khoảng trống giữa tiêu đề và tên mục.
 - **🖼️ Khung & 🧩 Ghép ảnh** (`modules/image_cropper.js`, `image_framer.js`, `collage_builder.js`; backend `services/photo_frame.py`, `item_media.py`, `api_routes_media.py`): bấm vào ảnh trên Xem trước / nút "🖼️ Khung" ở bảng mục / thẻ ảnh Bước 3. Ảnh gốc không bị ghi đè (kết quả ở `anh/framed/`, ảnh từng ô ở `anh/gallery/`). Route mới: `GET item-media`, `POST item-frame`, `item-gallery`, `item-gallery-upload` (bytes), `item-gallery-web`.
 - **Cắt ảnh không mất chữ** (`services/smart_crop.py`): dùng cho Ghép ảnh, đóng khung, và thẻ 4:3 của ảnh web/ảnh chụp (Bước 6). Chọn cửa sổ giữ nhiều chi tiết nhất, không cắt ngang dòng chữ; lệch tỉ lệ > 28% hoặc cắt dòng chữ > 6% => giữ trọn ảnh trên nền mờ. Ảnh web tải về giữ bản gốc `<tên>_goc.png` (Khung/Ghép luôn dùng bản gốc). Ảnh ghép: nền `cream|beige|white|transparent`, viền `white|brown|gold|none`, canvas 1200×1200.
+- **Mẫu ảnh chung & Link nguồn ngay Bước 1** (`modules/media_setup.js`; backend `services/auto_media.py`, `source_links.py`, `api_routes_auto.py`): settings `collageLayout`, `collageStyle`, `sourceLinks`, `autoInfoFromSources`. `media_ops.parse_and_fetch_anh_nhac_list` là lớp bọc: chạy bản gốc (`_parse_and_fetch_anh_nhac_list_core`) rồi `auto_media.apply_after_fetch` — ưu tiên ảnh khớp tên mục từ link nguồn, thiếu thì tìm web, không đủ ảnh thì tự đổi sang bố cục ít ô hơn (không để ô trống). Ảnh gốc ban đầu của mục nhớ ở `base_image_path`. Cache trang đã đọc: `text/sources.json`. Route: `POST media-settings`, `POST auto-media`, `POST /api/sources/inspect`, `POST /api/sources/extract`. Test dùng `VDCS_PRODUCT_IMAGES_DIR` / `VDCS_EXPORT_DIR` để không ghi vào kho ảnh thật.

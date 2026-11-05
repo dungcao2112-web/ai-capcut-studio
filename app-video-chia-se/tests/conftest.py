@@ -22,6 +22,8 @@ BACKEND = APP_ROOT / "backend"
 def _isolated_env(tmp_path_factory):
     root = tmp_path_factory.mktemp("projects")
     os.environ["VDCS_PROJECTS_ROOT"] = str(root)
+    os.environ["VDCS_PRODUCT_IMAGES_DIR"] = str(tmp_path_factory.mktemp("kho_anh"))
+    os.environ["VDCS_EXPORT_DIR"] = str(tmp_path_factory.mktemp("video_xuat"))
     os.environ["VDCS_CLOUD_MODE"] = "1"
     if str(BACKEND) not in sys.path:
         sys.path.insert(0, str(BACKEND))

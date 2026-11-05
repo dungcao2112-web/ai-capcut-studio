@@ -186,3 +186,4 @@ def _batch(pid, body, qs):
 
 # Route ảnh theo mục (Chọn khung hình / Ghép nhiều ảnh) — đăng ký vào cùng bộ định tuyến
 from services import api_routes_media as _api_routes_media  # noqa: E402,F401
+from services import api_routes_auto as _api_routes_auto  # noqa: E402,F401

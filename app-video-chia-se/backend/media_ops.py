@@ -2291,6 +2291,38 @@ def parse_and_fetch_anh_nhac_list(
     use_ai: bool = False,
     custom_request: str = "",
 ) -> dict[str, Any]:
+    """Tự tìm & Gắn Hình Ảnh + áp dụng Mẫu ghép ảnh & Link nguồn đã chọn ở Bước 1 (services/auto_media.py)."""
+    req = custom_request
+    if use_ai:
+        try:  # Cho AI đọc thêm thông tin từ link nguồn sếp dán (nếu có)
+            from services.auto_media import media_settings
+            from services.source_links import load_sources
+
+            proj_cfg = media_settings(read_json(project_dir / "project.json", {}) or {})
+            if proj_cfg["links"]:
+                srcs = [s for s in load_sources(project_dir, proj_cfg["links"]) if s.get("ok")]
+                ctx = "\n".join(f"- {s['title']}: {s.get('description') or s.get('text', '')[:500]}" for s in srcs)[:4000]
+                if ctx:
+                    req = f"{custom_request}\nThông tin tham khảo từ link nguồn của sếp (ưu tiên dùng):\n{ctx}".strip()
+        except Exception:
+            pass
+    result = _parse_and_fetch_anh_nhac_list_core(project_dir, raw_text, current_title, use_ai, req)
+    try:
+        from services.auto_media import apply_after_fetch
+
+        result = apply_after_fetch(project_dir, result)
+    except ImportError:
+        pass
+    return result
+
+
+def _parse_and_fetch_anh_nhac_list_core(
+    project_dir: Path,
+    raw_text: str,
+    current_title: str = "",
+    use_ai: bool = False,
+    custom_request: str = "",
+) -> dict[str, Any]:
     """Parse a plain list of items (e.g., '7. BỆNH VIỆN ĐI SINH\\n\\nTừ dũ\\nHùng Vương...')
     and automatically search & download web images for every item in parallel.
     """

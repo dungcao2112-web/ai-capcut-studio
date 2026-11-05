@@ -66,6 +66,14 @@ def apply_cloud_fallbacks(cfg: dict[str, Any], app_root: Path) -> dict[str, Any]
         paths["projects_root"] = env_root
         Path(env_root).mkdir(parents=True, exist_ok=True)
 
+    # Kiểm thử: tách riêng thư viện ảnh & thư mục xuất để test không ghi vào kho ảnh thật của app
+    for env_key, key in (("VDCS_PRODUCT_IMAGES_DIR", "product_images_dir"), ("VDCS_EXPORT_DIR", "export_dir")):
+        val = os.environ.get(env_key, "").strip()
+        if val:
+            originals.setdefault(key, paths.get(key))
+            paths[key] = val
+            Path(val).mkdir(parents=True, exist_ok=True)
+
     if not is_cloud_mode():
         if originals:
             cfg["_cloud_original_paths"] = originals
@@ -73,7 +81,9 @@ def apply_cloud_fallbacks(cfg: dict[str, Any], app_root: Path) -> dict[str, Any]
 
     for key, sub in _DIR_FALLBACKS.items():
         val = paths.get(key)
-        if val is not None and is_windows_path(val) and not (key == "projects_root" and env_root):
+        overridden = (key == "projects_root" and env_root) or (key == "product_images_dir" and os.environ.get("VDCS_PRODUCT_IMAGES_DIR")) \
+            or (key == "export_dir" and os.environ.get("VDCS_EXPORT_DIR"))
+        if val is not None and is_windows_path(val) and not overridden:
             originals[key] = val
             paths[key] = str((app_root / sub).resolve())
     for key, cmd in _EXE_FALLBACKS.items():
