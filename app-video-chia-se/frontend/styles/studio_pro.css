@@ -1,0 +1,191 @@
+/* Studio Pro — Design Tokens + 2 Theme: Dark Studio (mặc định) & Warm Beige Studio (#F6EFE6 / #FFFDF9)
+   Nạp SAU styles.css: chỉ ghi đè màu/viền/bo góc, không đổi bố cục hay hành vi cũ. */
+
+html[data-theme="dark"] {
+  --bg-dark: #080a0f; --bg-panel: #10131b; --bg-card: #161a24; --bg-input: #0b0e14;
+  --border: #252b3a; --text-main: #f1f5f9; --text-muted: #9aa5b8;
+  --accent: #38bdf8; --accent-hover: #0284c7;
+  --sp-bg: #080a0f; --sp-surface: #10131b; --sp-surface-2: #0c0f16; --sp-surface-3: #161a24;
+  --sp-border: #252b3a; --sp-border-strong: #3a4357;
+  --sp-text: #f1f5f9; --sp-text-soft: #cbd5e1; --sp-muted: #9aa5b8;
+  --sp-accent: #38bdf8; --sp-accent-strong: #0284c7; --sp-accent-soft: rgba(56, 189, 248, 0.14);
+  --sp-gold: #fbbf24; --sp-ok: #34d399; --sp-warn: #fbbf24; --sp-bad: #f87171;
+  --sp-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  --sp-topbar: rgba(10, 12, 18, 0.92);
+  color-scheme: dark;
+}
+
+html[data-theme="beige"] {
+  --bg-dark: #F6EFE6; --bg-panel: #FFFDF9; --bg-card: #FBF6EF; --bg-input: #FFFFFF;
+  --border: #E6D8C5; --text-main: #2B1D14; --text-muted: #6F5A49;
+  --accent: #B45309; --accent-hover: #92400E;
+  --success: #047857; --warning: #B45309; --danger: #B91C1C; --stop-gate: #C2410C;
+  --sp-bg: #F6EFE6; --sp-surface: #FFFDF9; --sp-surface-2: #FBF6EF; --sp-surface-3: #F3E9DC;
+  --sp-border: #E6D8C5; --sp-border-strong: #CDB79C;
+  --sp-text: #2B1D14; --sp-text-soft: #4A3527; --sp-muted: #6F5A49;
+  --sp-accent: #B45309; --sp-accent-strong: #92400E; --sp-accent-soft: rgba(180, 83, 9, 0.10);
+  --sp-gold: #A16207; --sp-ok: #047857; --sp-warn: #B45309; --sp-bad: #B91C1C;
+  --sp-shadow: 0 10px 28px rgba(110, 82, 55, 0.14);
+  --sp-topbar: rgba(255, 253, 249, 0.94);
+  color-scheme: light;
+}
+
+/* ---------- Nền tảng chung ---------- */
+html { transition: background-color 0.25s ease; }
+body {
+  font-family: "Be Vietnam Pro", "Segoe UI", system-ui, -apple-system, sans-serif;
+  background: var(--sp-bg);
+  color: var(--sp-text);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+.topbar {
+  background: var(--sp-topbar);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--sp-border);
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.brand h1 { color: var(--sp-text); font-weight: 800; letter-spacing: -0.3px; }
+.top-actions { flex-wrap: wrap; }
+.sidebar { background: var(--sp-surface-2); border-right: 1px solid var(--sp-border); }
+.sticky-command-bar { background: color-mix(in srgb, var(--sp-bg) 93%, transparent); border-bottom-color: var(--sp-border); }
+.panel {
+  background: var(--sp-surface);
+  border-color: var(--sp-border);
+  border-radius: 14px;
+  box-shadow: var(--sp-shadow);
+}
+.panel h2, .panel h3 { color: var(--sp-text); font-weight: 800; letter-spacing: -0.2px; }
+label { color: var(--sp-muted); }
+.step-head { color: var(--sp-text); }
+.step-msg { color: var(--sp-muted); }
+.step-card { background: var(--sp-surface-3); border-color: var(--sp-border); border-radius: 10px; }
+.step-card:hover { background: var(--sp-surface); border-color: var(--sp-accent); }
+.step-card.active-step { background: var(--sp-surface); border-color: var(--sp-accent); box-shadow: 0 0 0 1px var(--sp-accent-soft), 0 6px 18px var(--sp-accent-soft); }
+.step-card.done { border-left: 4px solid var(--sp-ok); }
+.clean-details { background: var(--sp-surface-2); border-color: var(--sp-border); border-radius: 10px; }
+.clean-details > summary { background: var(--sp-surface-3); color: var(--sp-text-soft); }
+.clean-details > summary:hover { background: var(--sp-surface); color: var(--sp-text); }
+th { background: var(--sp-surface-3); color: var(--sp-muted); }
+th, td { border-color: var(--sp-border); }
+.dropzone { background: var(--sp-surface-2); border-color: var(--sp-border-strong); }
+.modal-box { background: var(--sp-surface); color: var(--sp-text); border: 1px solid var(--sp-border); border-radius: 16px; }
+.progress-bar-wrap { background: var(--sp-surface-2); border-color: var(--sp-border); }
+
+input[type="text"], input[type="number"], input[type="search"], select, textarea {
+  background: var(--bg-input);
+  border-color: var(--sp-border);
+  color: var(--sp-text);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+input:focus, select:focus, textarea:focus {
+  outline: none;
+  border-color: var(--sp-accent);
+  box-shadow: 0 0 0 3px var(--sp-accent-soft);
+}
+button, .btn { border-radius: 9px; }
+button:focus-visible { outline: 2px solid var(--sp-accent); outline-offset: 2px; }
+.tab-btn { border-radius: 10px; background: var(--sp-surface); color: var(--sp-muted); border-color: var(--sp-border); }
+.tab-btn.active, .tab-btn.active:hover:not(:disabled) { background: var(--sp-accent-strong); border-color: var(--sp-accent); color: #fff; box-shadow: 0 6px 16px var(--sp-accent-soft); }
+.preset-pill-group { background: var(--sp-surface-2); border-color: var(--sp-border); }
+.preset-pill { color: var(--sp-muted); }
+.preset-pill.active { background: var(--sp-accent-strong); color: #fff; }
+
+/* ---------- Warm Beige: nút & badge giữ tương phản cao trên nền sáng ---------- */
+html[data-theme="beige"] button, html[data-theme="beige"] .btn { background: #FFFFFF; color: var(--sp-text); border-color: var(--sp-border-strong); }
+html[data-theme="beige"] button:hover:not(:disabled) { background: #FFF4E6; border-color: var(--sp-accent); }
+html[data-theme="beige"] button.primary { background: #B45309; border-color: #92400E; color: #fff; }
+html[data-theme="beige"] button.primary:hover:not(:disabled) { background: #92400E; }
+html[data-theme="beige"] button.success { background: #047857; border-color: #065F46; color: #fff; }
+html[data-theme="beige"] button.success:hover:not(:disabled) { background: #065F46; }
+html[data-theme="beige"] button.warning { background: #D97706; border-color: #B45309; color: #fff; }
+html[data-theme="beige"] button.danger { background: #B91C1C; border-color: #991B1B; color: #fff; }
+html[data-theme="beige"] .tab-btn.active, html[data-theme="beige"] .preset-pill.active,
+html[data-theme="beige"] .tab-btn.active:hover:not(:disabled), html[data-theme="beige"] .preset-pill.active:hover:not(:disabled) { background: #92400E; color: #fff; border-color: #92400E; }
+html[data-theme="beige"] .preset-pill:hover:not(:disabled) { background: #F3E9DC; color: var(--sp-text); }
+html[data-theme="beige"] .badge { background: #FFFFFF; color: var(--sp-text-soft); border-color: var(--sp-border); }
+html[data-theme="beige"] .badge.success { background: #ECFDF5; color: #047857; border-color: #A7F3D0; }
+html[data-theme="beige"] .badge.warning { background: #FFFBEB; color: #B45309; border-color: #FCD34D; }
+html[data-theme="beige"] .badge.danger { background: #FEF2F2; color: #B91C1C; border-color: #FECACA; }
+html[data-theme="beige"] .badge.info { background: #FFF4E6; color: #92400E; border-color: #F4C58A; }
+html[data-theme="beige"] .checkerboard { background-color: #EFE6DA; background-image: linear-gradient(45deg, #E4D7C6 25%, transparent 25%), linear-gradient(-45deg, #E4D7C6 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #E4D7C6 75%), linear-gradient(-45deg, transparent 75%, #E4D7C6 75%); }
+html[data-theme="beige"] .gate-banner { background: linear-gradient(90deg, #FFEDD5, #FFF7ED); color: var(--sp-text); }
+html[data-theme="beige"] pre, html[data-theme="beige"] code { background: #F3E9DC; color: #4A3527; }
+
+/* Lớp phủ tương phản: class do modules/theme_adapter.js gắn theo màu inline (chỉ có hiệu lực ở Be ấm) */
+html[data-theme="beige"] .sp-bg-dark { background-color: var(--sp-surface-2) !important; background-image: none !important; }
+html[data-theme="beige"] .sp-bd-dark { border-color: var(--sp-border) !important; }
+html[data-theme="beige"] .sp-fg-text { color: var(--sp-text) !important; }
+html[data-theme="beige"] .sp-fg-muted { color: var(--sp-muted) !important; }
+html[data-theme="beige"] .sp-fg-blue { color: #1D4ED8 !important; }
+html[data-theme="beige"] .sp-fg-green { color: #047857 !important; }
+html[data-theme="beige"] .sp-fg-amber { color: #92400E !important; }
+html[data-theme="beige"] .sp-fg-red { color: #B91C1C !important; }
+html[data-theme="beige"] button.sp-fg-text, html[data-theme="beige"] button.sp-bg-dark { color: var(--sp-text) !important; }
+
+/* ---------- Công tắc Theme trên Header ---------- */
+.sp-theme-switch {
+  display: inline-flex; align-items: center; gap: 2px; padding: 3px;
+  background: var(--sp-surface-2); border: 1px solid var(--sp-border); border-radius: 999px;
+}
+.sp-theme-switch button {
+  border: none !important; background: transparent !important; color: var(--sp-muted) !important;
+  padding: 5px 11px; border-radius: 999px; font-size: 12px;
+}
+.sp-theme-switch button.on { background: var(--sp-accent-strong) !important; color: #fff !important; box-shadow: 0 3px 10px var(--sp-accent-soft); }
+.sp-env-badge { font-size: 11px; }
+
+/* ---------- Thanh phím tắt nhanh ---------- */
+.sp-shortcut-strip { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 7px; font-size: 11px; color: var(--sp-muted); }
+.sp-kbd {
+  display: inline-flex; align-items: center; gap: 4px; padding: 1px 7px; border-radius: 6px;
+  background: var(--sp-surface-3); border: 1px solid var(--sp-border); border-bottom-width: 2px;
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: 10.5px; color: var(--sp-text-soft);
+}
+
+/* ---------- Bộ duyệt dự án ở cột trái ---------- */
+.sp-project-browser { display: flex; flex-direction: column; gap: 7px; padding-bottom: 10px; border-bottom: 1px dashed var(--sp-border); }
+.sp-pb-head { display: flex; justify-content: space-between; align-items: center; font-weight: 700; font-size: 13px; color: var(--sp-text); }
+.sp-pb-search { position: relative; }
+.sp-pb-search input { padding-left: 30px; border-radius: 9px; }
+.sp-pb-search::before { content: "🔎"; position: absolute; left: 9px; top: 50%; transform: translateY(-50%); font-size: 12px; opacity: 0.7; }
+.sp-pb-filters { display: flex; gap: 4px; flex-wrap: wrap; }
+.sp-pb-filters button { padding: 2px 9px; font-size: 11px; border-radius: 999px; }
+.sp-pb-filters button.on { background: var(--sp-accent-strong) !important; color: #fff !important; border-color: var(--sp-accent) !important; }
+.sp-pb-list { display: flex; flex-direction: column; gap: 5px; max-height: 260px; overflow-y: auto; padding-right: 2px; }
+.sp-pb-card {
+  text-align: left; display: block; width: 100%; padding: 7px 9px; border-radius: 10px;
+  background: var(--sp-surface-3); border: 1px solid var(--sp-border); cursor: pointer; transition: all 0.15s ease;
+}
+.sp-pb-card:hover { border-color: var(--sp-accent); transform: translateX(2px); }
+.sp-pb-card.active { border-color: var(--sp-accent); box-shadow: inset 3px 0 0 var(--sp-accent); background: var(--sp-surface); }
+.sp-pb-title { font-size: 12.5px; font-weight: 700; color: var(--sp-text); line-height: 1.3; word-break: break-word; }
+.sp-pb-meta { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.sp-pb-meta .badge { font-size: 10.5px; padding: 1px 7px; }
+.sp-pb-empty { font-size: 12px; color: var(--sp-muted); padding: 6px 2px; }
+mark.sp-hl { background: rgba(250, 204, 21, 0.35); color: inherit; border-radius: 3px; padding: 0 1px; }
+
+/* ---------- Toast thông báo ---------- */
+.sp-toast-stack { position: fixed; right: 18px; bottom: 18px; z-index: 2000; display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
+.sp-toast {
+  pointer-events: auto; min-width: 260px; max-width: 420px; padding: 11px 14px 11px 12px; border-radius: 12px;
+  background: var(--sp-surface); color: var(--sp-text); border: 1px solid var(--sp-border);
+  border-left: 4px solid var(--sp-accent); box-shadow: var(--sp-shadow);
+  display: flex; gap: 10px; align-items: flex-start; font-size: 13px; line-height: 1.4;
+  animation: spToastIn 0.26s cubic-bezier(.2,.9,.3,1.2);
+}
+.sp-toast.success { border-left-color: var(--sp-ok); }
+.sp-toast.warning { border-left-color: var(--sp-warn); }
+.sp-toast.error { border-left-color: var(--sp-bad); }
+.sp-toast.leaving { animation: spToastOut 0.22s ease forwards; }
+.sp-toast .sp-toast-x { margin-left: auto; background: none !important; border: none !important; color: var(--sp-muted) !important; padding: 0 2px; }
+@keyframes spToastIn { from { opacity: 0; transform: translateY(12px) scale(0.97); } to { opacity: 1; transform: none; } }
+@keyframes spToastOut { to { opacity: 0; transform: translateX(24px); } }
+
+@media (max-width: 1200px) {
+  .brand h1 { font-size: 14px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}

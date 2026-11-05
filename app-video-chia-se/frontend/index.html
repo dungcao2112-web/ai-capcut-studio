@@ -9,6 +9,16 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Anton&family=Baloo+2:wght@700;800&family=Bangers&family=Barlow+Condensed:wght@600;700;800&family=Be+Vietnam+Pro:wght@700;800&family=Chakra+Petch:wght@700&family=Coiny&family=Kanit:wght@700;800&family=Lexend:wght@700;800&family=Mali:wght@700&family=Montserrat:wght@700;800;900&family=Oswald:wght@700&family=Patrick+Hand&family=Paytone+One&family=Phudu:wght@700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="styles.css" />
+  <!-- Studio Pro (Claude Cloud): font đọc tiếng Việt rõ nét + theme Tối / Be ấm -->
+  <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <script>
+    (function () {
+      var t = "dark";
+      try { t = localStorage.getItem("vdcs.studio.theme") || "dark"; } catch (e) {}
+      document.documentElement.setAttribute("data-theme", t === "beige" ? "beige" : "dark");
+    })();
+  </script>
+  <link rel="stylesheet" href="styles/studio_pro.css" />
 </head>
 <body>
   <header class="topbar">
@@ -959,5 +969,9 @@
   </div>
 
   <script src="app.js"></script>
+  <!-- Studio Pro modules (bổ sung, không thay thế hàm cũ của app.js) -->
+  <script src="modules/theme_adapter.js"></script>
+  <script src="modules/ui_enhancements.js"></script>
+  <script src="modules/project_browser.js"></script>
 </body>
 </html>
