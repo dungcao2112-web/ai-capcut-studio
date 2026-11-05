@@ -128,7 +128,7 @@
     const dark = isDark(style);
     const single = bullets.length === 1;
     bullets.slice(0, 4).forEach((b, k) => {
-      const text = single ? `📍 ${b}` : `• ${b}`;
+      const text = single ? (/^\p{Extended_Pictographic}/u.test(String(b).trim()) ? b : `📍 ${b}`) : `• ${b}`;
       const fit = fitText(ctx, text, BODY_FONT, "700", sizeBase - (bullets.length >= 3 ? 4 : 0), 22, 860, 2);
       ctx.font = `700 ${fit.size}px ${BODY_FONT}`;
       const tw = Math.max(...fit.lines.map((ln) => ctx.measureText(ln).width)) + 76;

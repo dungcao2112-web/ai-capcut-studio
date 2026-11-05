@@ -196,8 +196,31 @@
     });
   }
 
+  // Preset Ảnh + Nhạc: kịch bản là chuẩn => khi lưu, mô tả (bullets) của từng mục lấy theo ô Kịch bản
+  // (collectBangFromTable gốc lấy bullets từ dữ liệu cũ nên mô tả mới thêm không lên video)
+  const normName = (x) => String(x || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").replace(/[^a-z0-9]+/g, " ").trim();
+  function wrapCollect() {
+    const orig = window.collectBangFromTable;
+    if (typeof orig !== "function" || orig.__si) return;
+    window.collectBangFromTable = function (...a) {
+      const bang = orig.apply(this, a);
+      try {
+        if ($("inpPreset")?.value === "anh_nhac" && $("inpScript")?.value.trim()) {
+          const by = new Map((window.parseScriptOutlineJS($("inpScript").value, "").entries || []).map((e) => [normName(e.heading), e]));
+          (bang.items || []).forEach((it) => {
+            const e = by.get(normName(it.ten)) || by.get(normName(it.display_name));
+            if (e && e.bullets && e.bullets.length) { it.bullets = e.bullets.slice(); it.ghi_chu = e.bullets.join(" | "); }
+          });
+        }
+      } catch (err) { /* giữ nguyên kết quả gốc */ }
+      return bang;
+    };
+    window.collectBangFromTable.__si = true;
+  }
+
   let origOnChanged = function () {};
   function init() {
+    wrapCollect();
     const box = $("scriptAnalysisPreviewBox");
     origOnChanged = window.onScriptInputChanged;
     if (typeof origOnChanged !== "function" || !box) return;

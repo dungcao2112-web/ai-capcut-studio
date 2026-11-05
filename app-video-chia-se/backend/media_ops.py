@@ -2300,10 +2300,15 @@ def parse_and_fetch_anh_nhac_list(
 
             proj_cfg = media_settings(read_json(project_dir / "project.json", {}) or {})
             if proj_cfg["links"]:
+                from services.source_info import ai_context
+
                 srcs = [s for s in load_sources(project_dir, proj_cfg["links"]) if s.get("ok")]
-                ctx = "\n".join(f"- {s['title']}: {s.get('description') or s.get('text', '')[:500]}" for s in srcs)[:4000]
+                names = [e["heading"] for e in parse_script_outline(raw_text, current_title).get("entries", [])]
+                tpl = str(((read_json(project_dir / "project.json", {}) or {}).get("settings") or {}).get("infoTemplate") or "")
+                ctx = ai_context(names, srcs, template=tpl)
                 if ctx:
-                    req = f"{custom_request}\nThông tin tham khảo từ link nguồn của sếp (ưu tiên dùng):\n{ctx}".strip()
+                    req = (f"{custom_request}\nTHÔNG TIN THẬT TỪ LINK NGUỒN CỦA SẾP theo từng mục — viết bullets (địa chỉ, giá,"
+                           f" đặc điểm...) DỰA TRÊN thông tin này, không bịa thêm:\n{ctx}").strip()
         except Exception:
             pass
     result = _parse_and_fetch_anh_nhac_list_core(project_dir, raw_text, current_title, use_ai, req)

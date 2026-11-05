@@ -24,7 +24,8 @@
   const BGS = [["cream", "Kem"], ["beige", "Be ấm"], ["white", "Trắng"], ["transparent", "Trong suốt"]];
   const BORDERS = [["white", "Trắng"], ["brown", "Nâu"], ["gold", "Vàng"], ["none", "Không"]];
   const KIND_ICON = { facebook: "📘", tiktok: "🎵", shopee: "🛍️", lazada: "🛒", youtube: "▶️", instagram: "📸", tiki: "🛒", image: "🖼️", web: "🌐" };
-  const M = { layout: "1", style: { bg: "cream", border: "white" }, links: [], autoInfo: false, status: {}, timer: null };
+  const M = { layout: "1", style: { bg: "cream", border: "white" }, links: [], autoInfo: true, template: "", status: {}, timer: null };
+  const TPL_CHIPS = ["{địa chỉ}", "{giá}", "{hotline}", "{giờ mở cửa}", "{tóm tắt}"];
 
   const kindOf = (u) => {
     const h = (() => { try { return new URL(u).hostname; } catch (e) { return ""; } })();
@@ -44,14 +45,18 @@
       <div class="ms-layouts">${LAYOUTS.map((l) => `<button type="button" class="sm cb-lay ${l[0] === M.layout ? "on" : ""}" data-l="${l[0]}" title="${l[1]}">${diagram(l)}<small>${l[1]}</small></button>`).join("")}</div>
       ${many ? `<div class="cb-styles"><b>🎨 Nền:</b>${BGS.map(([k, t]) => `<button type="button" class="sm ${M.style.bg === k ? "on" : ""}" data-bg="${k}">${t}</button>`).join("")}
         <b style="margin-left:8px;">🖼️ Viền ảnh:</b>${BORDERS.map(([k, t]) => `<button type="button" class="sm ${M.style.border === k ? "on" : ""}" data-border="${k}">${t}</button>`).join("")}</div>` : ""}
-      <div class="ms-step" style="margin-top:8px;"><b>② 🔗 Link nguồn tìm ảnh &amp; thông tin</b> <span class="step-msg">— không bắt buộc. Không dán link thì app tự tìm trên web như bình thường.</span></div>
+      <div class="ms-step" style="margin-top:8px;"><b>② 🔗 Link nguồn — lấy THÔNG TIN &amp; ảnh cho từng mục</b> <span class="step-msg">— không bắt buộc. App đọc nội dung link để lấy địa chỉ, giá, hotline, mô tả... Không dán link thì tự tìm trên web như bình thường.</span></div>
       <textarea id="msLinkInput" rows="2" placeholder="Dán link vào đây (Facebook, TikTok, Shopee, web, link ảnh...) — dán bao nhiêu cũng được, mỗi lần dán app tự nhận diện"></textarea>
       <div class="ms-links">${M.links.length ? M.links.map((u, k) => {
         const st = M.status[u];
         const badge = !st ? '<span class="badge">⏳ đang đọc</span>' : st.ok ? `<span class="badge success">✓ ${st.images} ảnh</span>` : `<span class="badge danger" title="${esc(st.error)}">⚠ không đọc được</span>`;
         return `<span class="ms-link" title="${esc(st && st.title ? st.title + " — " + u : u)}">${KIND_ICON[kindOf(u)] || "🌐"} <a href="${esc(u)}" target="_blank" rel="noopener">${esc(shortUrl(u))}</a> ${badge}<button type="button" class="sm" data-del="${k}" title="Bỏ link">✕</button></span>`;
       }).join("") : '<span class="step-msg">Chưa có link nào.</span>'}</div>
-      <div class="ms-foot"><label style="margin:0; display:inline-flex; gap:6px; align-items:center;"><input type="checkbox" id="msAutoInfo" style="width:auto;" ${M.autoInfo ? "checked" : ""}/> 📝 Mục chưa có mô tả thì lấy 1 câu thông tin từ nguồn</label>
+      <div class="ms-step" style="margin-top:8px;"><b>③ 📝 Mẫu câu mô tả cho mỗi mục</b> <span class="step-msg">— mỗi dòng 1 câu. App CHỈ điền thông tin từ link vào chỗ {…}; dòng nào nguồn không có thông tin thì bỏ, không tự thêm câu khác.</span></div>
+      <div class="ms-tplchips"><span class="step-msg">Chèn chỗ trống:</span>${TPL_CHIPS.map((c) => `<button type="button" class="sm" data-tpl="${esc(c)}">${esc(c)}</button>`).join("")}
+        <button type="button" class="sm" id="msTplCustom" title="Tự đặt tên chỗ trống, VD {bác sĩ trưởng khoa} — app tìm dòng 'Bác sĩ trưởng khoa: ...' trong link">＋ Chỗ trống tự đặt</button></div>
+      <textarea id="msTemplate" rows="3" placeholder="VD:&#10;📍 {địa chỉ}&#10;Giá sinh thường: {giá}&#10;(Để trống = app tự chọn: địa chỉ, giá, hotline...)">${esc(M.template)}</textarea>
+      <div class="ms-foot"><label style="margin:0; display:inline-flex; gap:6px; align-items:center;"><input type="checkbox" id="msAutoInfo" style="width:auto;" ${M.autoInfo ? "checked" : ""}/> 📝 Tự điền mô tả theo mẫu cho mục chưa có mô tả</label>
         <span>${M.links.length ? `<span class="badge info">${M.links.length} link</span> <button type="button" class="sm" id="msClear">Xoá hết link</button>` : ""}
           <button type="button" class="sm primary" id="msApplyNow" title="Áp dụng mẫu ảnh & nguồn cho các mục đã có ảnh (không tìm lại từ đầu)">🧩 Áp dụng cho các mục hiện có</button></span></div>`;
     box.querySelectorAll("[data-l]").forEach((b) => (b.onclick = () => { M.layout = b.dataset.l; saveSoon(); render(); }));
@@ -63,6 +68,19 @@
     inp.addEventListener("input", () => { if (/\s$/.test(inp.value) || inp.value.includes("\n")) absorb(inp); });
     inp.addEventListener("blur", () => absorb(inp));
     $("msAutoInfo").onchange = (e) => { M.autoInfo = e.target.checked; saveSoon(); };
+    const tpl = $("msTemplate");
+    tpl.addEventListener("input", () => { M.template = tpl.value; saveSoon(); });
+    const insertTpl = (text) => {
+      const a = tpl.selectionStart ?? tpl.value.length, b = tpl.selectionEnd ?? a;
+      tpl.value = tpl.value.slice(0, a) + text + tpl.value.slice(b);
+      tpl.focus(); tpl.selectionStart = tpl.selectionEnd = a + text.length;
+      M.template = tpl.value; saveSoon();
+    };
+    box.querySelectorAll("[data-tpl]").forEach((b) => (b.onclick = () => insertTpl(b.dataset.tpl)));
+    $("msTplCustom").onclick = () => {
+      const label = (window.prompt("Tên thông tin cần lấy (VD: bác sĩ trưởng khoa, giờ khám, bảo hành):") || "").trim();
+      if (label) insertTpl(`${label.charAt(0).toUpperCase() + label.slice(1)}: {${label}}`);
+    };
     if ($("msClear")) $("msClear").onclick = () => { M.links = []; saveSoon(); render(); };
     $("msApplyNow").onclick = applyNow;
   }
@@ -94,9 +112,10 @@
     if (!pid) return;
     try {
       await window.apiPost(`/api/projects/${encodeURIComponent(pid)}/media-settings`,
-        { collageLayout: M.layout, collageStyle: M.style, sourceLinks: M.links, autoInfoFromSources: M.autoInfo });
+        { collageLayout: M.layout, collageStyle: M.style, sourceLinks: M.links, autoInfoFromSources: M.autoInfo, infoTemplate: M.template });
       const proj = cur().project;
-      if (proj) Object.assign(proj.settings = proj.settings || {}, { collageLayout: M.layout, collageStyle: { ...M.style }, sourceLinks: M.links.slice(), autoInfoFromSources: M.autoInfo });
+      if (proj) Object.assign(proj.settings = proj.settings || {}, { collageLayout: M.layout, collageStyle: { ...M.style }, sourceLinks: M.links.slice(), autoInfoFromSources: M.autoInfo, infoTemplate: M.template });
+      document.dispatchEvent(new CustomEvent("studio:mediasettings", { detail: { template: M.template, links: M.links.slice() } }));
       if (inspect) inspectLinks();
     } catch (e) { toast("Không lưu được thiết lập ảnh: " + esc(e.message), "error"); }
   }
@@ -125,7 +144,8 @@
       const r = res.report || {};
       const src = (r.items || []).reduce((a, x) => a + (x.from_sources || 0), 0);
       const notes = (r.items || []).filter((x) => x.note).map((x) => `#${x.i} ${esc(x.name)}: ${esc(x.note)}`);
-      toast(`🧩 Xong ${(r.items || []).length} mục — ${src} ảnh lấy từ link nguồn.${notes.length ? "<br>ℹ️ " + notes.slice(0, 4).join("<br>ℹ️ ") : ""}${r.step6_warning ? " ⚠️ " + esc(r.step6_warning) : ""}`, notes.length ? "warning" : "success", 7000);
+      const infoN = (r.items || []).filter((x) => (x.facts || 0) + (x.snippets || 0) > 0).length;
+      toast(`🧩 Xong ${(r.items || []).length} mục — ${infoN} mục có thông tin từ link, ${src} ảnh lấy từ link nguồn.${notes.length ? "<br>ℹ️ " + notes.slice(0, 4).join("<br>ℹ️ ") : ""}${r.step6_warning ? " ⚠️ " + esc(r.step6_warning) : ""}`, notes.length ? "warning" : "success", 7000);
     } catch (e) { toast("Lỗi áp dụng: " + esc(e.message), "error", 6000); } finally { t && t.remove(); }
   }
 
@@ -134,7 +154,8 @@
     M.layout = s.collageLayout || "1";
     M.style = Object.assign({ bg: "cream", border: "white" }, s.collageStyle || {});
     M.links = Array.isArray(s.sourceLinks) ? s.sourceLinks.slice() : [];
-    M.autoInfo = !!s.autoInfoFromSources;
+    M.autoInfo = s.autoInfoFromSources !== false; // mặc định BẬT: link nguồn chủ yếu để lấy thông tin
+    M.template = String(s.infoTemplate || "");
     M.status = {};
     render();
     if (M.links.length) inspectLinks();

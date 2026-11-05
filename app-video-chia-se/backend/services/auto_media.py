@@ -26,7 +26,8 @@ def media_settings(proj: dict[str, Any]) -> dict[str, Any]:
     s = proj.get("settings") or {}
     links = [str(u) for u in (s.get("sourceLinks") or []) if str(u).startswith(("http://", "https://"))]
     return {"layout": str(s.get("collageLayout") or "1"), "style": dict(s.get("collageStyle") or {}),
-            "links": links, "auto_info": bool(s.get("autoInfoFromSources", False))}
+            "links": links, "auto_info": bool(s.get("autoInfoFromSources", True)),
+            "template": str(s.get("infoTemplate") or "")}
 
 
 def web_candidate(name: str, title: str, out_path: Path, cand: int) -> Path | None:
@@ -38,14 +39,6 @@ def web_candidate(name: str, title: str, out_path: Path, cand: int) -> Path | No
         return None
     p = Path(dl.get("original_path") or dl["path"])
     return p if p.is_file() else None
-
-
-def _shorten(text: str, n: int = 90) -> str:
-    t = " ".join(str(text).split())
-    t = re.split(r"(?<=[\.\!\?])\s", t)[0]
-    if len(t) <= n:
-        return t.rstrip(".")
-    return t[:n].rsplit(" ", 1)[0].rstrip(",;:") + "…"
 
 
 def _current_original(item: dict[str, Any]) -> Path | None:
@@ -62,7 +55,8 @@ def process_item(pdir: Path, item: dict[str, Any], k: int, n: int, cfg: dict[str
                  sources: list[dict[str, Any]], title: str) -> dict[str, Any]:
     from services.photo_frame import DEFAULT_STYLE, LAYOUTS, compose_collage
     from services.smart_crop import fit_score
-    from services.source_links import download_image, images_for_item, info_for_item
+    from services.source_info import template_for_item
+    from services.source_links import download_image, images_for_item
 
     idx = int(item.get("i", k + 1))
     name = str(item.get("ten") or item.get("display_name") or "").strip()
@@ -81,13 +75,18 @@ def process_item(pdir: Path, item: dict[str, Any], k: int, n: int, cfg: dict[str
                 item.setdefault("image_source_urls", []).append(cand["url"])
             if len(pool) >= need:
                 break
-        snippets = info_for_item(name, sources)
-        item["source_info"] = snippets
-        rep["info"] = len(snippets)
-        if cfg["auto_info"] and snippets and not item.get("bullets"):
-            item["bullets"] = [_shorten(snippets[0]["text"])]
-            item["ghi_chu"] = item["bullets"][0]
-            rep["info_added"] = True
+        info, desc = template_for_item(name, sources, cfg["template"])
+        info["template_bullets"] = desc
+        item["source_info"] = info
+        rep["facts"] = len(info["facts"])
+        rep["snippets"] = len(info["snippets"])
+        # Chỉ điền cho mục CHƯA có mô tả (mô tả sếp viết không bao giờ bị ghi đè); mô tả lấy tự động thì được làm mới
+        if cfg["auto_info"] and (not item.get("bullets") or item.get("bullets_from_sources")):
+            if desc:
+                item["bullets"] = desc
+                item["ghi_chu"] = " | ".join(desc)
+                item["bullets_from_sources"] = True
+                rep["info_added"] = desc
     rep["from_sources"] = len(pool)
     cur = _current_original(item)
     if cur and all(cur != p for p, _ in pool) and len(pool) < need:

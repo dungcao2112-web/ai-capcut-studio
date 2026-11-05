@@ -3,40 +3,10 @@
 tự ghép cho tất cả mục. Dùng 1 web server cục bộ giả lập nên không cần Internet."""
 from __future__ import annotations
 
-import functools
-import threading
-from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 import pytest
 from PIL import Image
-
-
-@pytest.fixture(scope="module")
-def site(tmp_path_factory):
-    root = tmp_path_factory.mktemp("site")
-    colors = {"tu-du": (200, 40, 60), "hung-vuong": (30, 90, 200), "dh-y-duoc": (20, 140, 90), "logo": (0, 0, 0)}
-    for name, c in colors.items():
-        size = (64, 64) if name == "logo" else (900, 650)
-        Image.new("RGB", size, c).save(root / f"{name}.jpg")
-    (root / "list.html").write_text("""<html><head><title>Top bệnh viện đi sinh</title>
-      <meta property="og:description" content="Danh sách bệnh viện"></head><body>
-      <img src="logo.jpg" alt="logo">
-      <h2>BV Từ Dũ</h2><p>BV Từ Dũ là bệnh viện phụ sản lớn nhất phía Nam, nằm ở Quận 1.</p>
-      <img src="tu-du.jpg" alt="Sảnh BV Từ Dũ">
-      <h2>Hùng Vương</h2><p>Bệnh viện Hùng Vương có khoa sinh dịch vụ rất đông mẹ bầu chọn.</p>
-      <img data-src="/hung-vuong.jpg" alt="BV Hùng Vương mặt tiền">
-      <script>var x = "BV Từ Dũ không phải chữ";</script></body></html>""", encoding="utf-8")
-    (root / "dhyd.html").write_text("""<html><head><title>BV ĐH Y Dược</title>
-      <meta property="og:title" content="BV ĐH Y Dược"><meta property="og:image" content="/dh-y-duoc.jpg">
-      <meta property="og:description" content="BV ĐH Y Dược TP.HCM có phòng sinh gia đình hiện đại."></head><body>Trang chủ</body></html>""",
-                                  encoding="utf-8")
-    handler = functools.partial(SimpleHTTPRequestHandler, directory=str(root))
-    handler.log_message = lambda *a, **k: None
-    srv = ThreadingHTTPServer(("127.0.0.1", 0), handler)
-    threading.Thread(target=srv.serve_forever, daemon=True).start()
-    yield f"http://127.0.0.1:{srv.server_address[1]}"
-    srv.shutdown()
 
 
 def test_extract_links_from_messy_paste():
@@ -66,7 +36,8 @@ def test_fetch_source_reads_title_images_text(site):
 
 
 def test_match_images_and_info_per_item(site):
-    from services.source_links import fetch_source, images_for_item, info_for_item
+    from services.source_info import info_for_item
+    from services.source_links import fetch_source, images_for_item
 
     srcs = [fetch_source(f"{site}/list.html"), fetch_source(f"{site}/dhyd.html")]
     assert images_for_item("BV Từ Dũ", 0, 3, srcs)[0]["url"].endswith("tu-du.jpg")
@@ -74,7 +45,11 @@ def test_match_images_and_info_per_item(site):
     assert images_for_item("BV ĐH Y Dược", 2, 3, srcs)[0]["url"].endswith("dh-y-duoc.jpg")
     assert images_for_item("Vinmec", 3, 3, srcs) == []
     info = info_for_item("BV Từ Dũ", srcs)
-    assert info and "phụ sản lớn nhất" in info[0]["text"]
+    assert info["snippets"] and "phụ sản lớn nhất" in info["snippets"][0]["text"]
+    # Đoạn dưới tiêu đề "2. Hùng Vương" KHÔNG nhắc tên mục nhưng vẫn là thông tin của mục đó
+    hv = info_for_item("Hùng Vương", srcs)
+    assert hv["snippets"] and "Phòng sinh gia đình" in hv["snippets"][0]["text"]
+    assert "phụ sản lớn nhất" not in " ".join(x["text"] for x in hv["snippets"])  # không lấy lẫn của mục khác
     # Mỗi mục 1 link theo thứ tự => không khớp tên vẫn lấy ảnh đại diện của link cùng thứ tự
     assert images_for_item("Tên lạ", 1, 2, srcs)[0]["url"].endswith("dh-y-duoc.jpg")
 
@@ -114,7 +89,8 @@ def test_auto_media_collage_for_all_items_from_sources(api, fresh_demo, site, mo
     assert items[1]["collage_layout"] == "2-ngang" and len(items[1]["gallery"]) == 2
     assert items[1]["gallery"][0]["path"].endswith("item_01_src0.png")  # ảnh từ nguồn đứng ô đầu
     assert "/framed/" in items[1]["custom_image_path"]
-    assert items[1]["source_info"] and "phụ sản" in items[1]["source_info"][0]["text"]
+    assert "phụ sản" in items[1]["source_info"]["snippets"][0]["text"]
+    assert {f["key"] for f in items[1]["source_info"]["facts"]} == {"address", "price", "phone"}
     assert items[1]["bullets"] == ["Quận 1, TP.HCM"]  # đã có mô tả => không ghi đè
     assert all(p["image_file"] for p in res["project"]["products_prepared"]["items"])
 

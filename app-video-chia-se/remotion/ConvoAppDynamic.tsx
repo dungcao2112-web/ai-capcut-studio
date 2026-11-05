@@ -93,6 +93,8 @@ const estimateTitleBottom = (): number => {
   const lines = Math.max(1, Math.min(3, Math.ceil((chars * size * 0.42) / 1000)));
   return top + lines * size * 1.05 + (hasSub ? 8 + 30 * 1.3 + 8 : 0);
 };
+// Dòng mô tả đã có biểu tượng ở đầu (VD mẫu "📍 {địa chỉ}") thì không chèn thêm 📍
+const withPin = (b: string) => (/^\p{Extended_Pictographic}/u.test(String(b || "").trim()) ? String(b) : `📍 ${b}`);
 const estLines = (text: string, fontSize: number, maxW: number, maxLines: number, charW = 0.46) =>
   Math.max(1, Math.min(maxLines, Math.ceil((Array.from(String(text || "")).length * fontSize * charW) / maxW)));
 const titleFontFamily = loadSelectedFont(activeCfg.titleFont, "Anton");
@@ -519,7 +521,7 @@ const GioDoItemCard: React.FC<{
     const baseTop = manualTop || (bullets.length >= 2 ? 172 : hasBullets ? 176 : 185);
     const effTop = manualTop ? baseTop : Math.max(baseTop, Math.round(estimateTitleBottom() + 14));
     const nameFS = fitFont(nameText, nameBase, 912, { maxLines: 2, minSize: 38, charWidthEm: 0.46 });
-    const pillFS = isSingleBullet ? fitFont(`📍 ${bullets[0]}`, 33, 884, { maxLines: 2, minSize: 22, charWidthEm: 0.46 }) : 0;
+    const pillFS = isSingleBullet ? fitFont(withPin(bullets[0]), 33, 884, { maxLines: 2, minSize: 22, charWidthEm: 0.46 }) : 0;
     const bulletFS = (b: string) => fitFont(`• ${b}`, bullets.length >= 3 ? 29 : 32, 872, { maxLines: 2, minSize: 20, charWidthEm: 0.46 });
     const textBlockH =
       (bullets.length >= 2 ? 18 : 28) +
@@ -685,7 +687,7 @@ const GioDoItemCard: React.FC<{
                   textAlign: "center",
                 }}
               >
-                {`📍 ${bullets[0]}`}
+                {withPin(bullets[0])}
               </div>
             </div>
           ) : (

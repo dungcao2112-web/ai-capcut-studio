@@ -3,16 +3,18 @@
 bật Cloud Demo Mode và tạo sẵn 2 dự án mẫu. Không đụng tới thư mục projects/ thật của app."""
 from __future__ import annotations
 
+import functools
 import json
 import os
 import sys
 import threading
 import urllib.error
 import urllib.request
-from http.server import ThreadingHTTPServer
+from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 import pytest
+from PIL import Image
 
 APP_ROOT = Path(__file__).resolve().parents[1]
 BACKEND = APP_ROOT / "backend"
@@ -85,3 +87,32 @@ def fresh_demo(demo):
 
     ensure_demo_projects(force=True)
     return True
+
+
+@pytest.fixture(scope="session")
+def site(tmp_path_factory):
+    """Web server cục bộ giả lập các link nguồn (trang danh sách, trang 1 mục, ảnh) — không cần Internet."""
+    root = tmp_path_factory.mktemp("site")
+    colors = {"tu-du": (200, 40, 60), "hung-vuong": (30, 90, 200), "dh-y-duoc": (20, 140, 90), "logo": (0, 0, 0)}
+    for name, c in colors.items():
+        size = (64, 64) if name == "logo" else (900, 650)
+        Image.new("RGB", size, c).save(root / f"{name}.jpg")
+    (root / "list.html").write_text("""<html><head><title>Top bệnh viện đi sinh</title>
+      <meta property="og:description" content="Danh sách bệnh viện"></head><body>
+      <img src="logo.jpg" alt="logo">
+      <h2>1. BV Từ Dũ</h2><p>BV Từ Dũ là bệnh viện phụ sản lớn nhất phía Nam, nằm ở Quận 1.</p>
+      <ul><li>Địa chỉ: 284 Cống Quỳnh, Quận 1, TP.HCM</li><li>Giá sinh thường từ 3.500.000đ</li><li>Hotline: 028 5404 2829</li></ul>
+      <img src="tu-du.jpg" alt="Sảnh BV Từ Dũ">
+      <h2>2. Hùng Vương</h2><p>Phòng sinh gia đình rộng rãi, mẹ được người thân ở cạnh suốt ca sinh.</p>
+      <img data-src="/hung-vuong.jpg" alt="BV Hùng Vương mặt tiền">
+      <script>var x = "BV Từ Dũ không phải chữ";</script></body></html>""", encoding="utf-8")
+    (root / "dhyd.html").write_text("""<html><head><title>BV ĐH Y Dược</title>
+      <meta property="og:title" content="BV ĐH Y Dược"><meta property="og:image" content="/dh-y-duoc.jpg">
+      <meta property="og:description" content="BV ĐH Y Dược TP.HCM có phòng sinh gia đình hiện đại."></head><body>Trang chủ</body></html>""",
+                                  encoding="utf-8")
+    handler = functools.partial(SimpleHTTPRequestHandler, directory=str(root))
+    handler.log_message = lambda *a, **k: None
+    srv = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    yield f"http://127.0.0.1:{srv.server_address[1]}"
+    srv.shutdown()

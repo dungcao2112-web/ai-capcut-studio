@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
-"""🔗 Link nguồn do sếp dán: tự nhận diện link, đọc trang (tiêu đề, mô tả, ảnh + chú thích, đoạn chữ),
-rồi khớp ẢNH và THÔNG TIN với từng mục theo tên. Không dán link => app tự tìm web như bình thường.
+"""🔗 Link nguồn do sếp dán: tự nhận diện link, đọc trang (tiêu đề, mô tả, ảnh + chú thích, đoạn chữ, các
+mục con theo tiêu đề nhỏ), rồi khớp ẢNH với từng mục theo tên. THÔNG TIN theo mục: services/source_info.py. Không dán link => app tự tìm web như bình thường.
 
 Kết quả đọc được lưu cache ở text/sources.json (không phải tải lại mỗi lần bấm).
 """
@@ -51,7 +51,9 @@ class _PageParser(HTMLParser):
     def __init__(self, base: str):
         super().__init__(convert_charrefs=True)
         self.base, self.title, self.meta, self.images, self.text = base, "", {}, [], []
+        self.sections: list[dict[str, Any]] = []  # [{heading, text[]}] — bài dạng danh sách: mỗi mục 1 tiêu đề nhỏ
         self._in_title = False
+        self._heading: list[str] | None = None
         self._skip = 0
 
     def handle_starttag(self, tag, attrs):
@@ -60,6 +62,10 @@ class _PageParser(HTMLParser):
             self._skip += 1
         elif tag == "title":
             self._in_title = True
+        elif tag in ("h1", "h2", "h3", "h4", "dt"):
+            self._heading = []
+        elif tag in ("p", "li", "div", "br", "td") and self.sections:
+            self.sections[-1]["text"].append("\n")
         elif tag == "meta":
             key = (a.get("property") or a.get("name") or "").lower()
             if key and a.get("content"):
@@ -77,6 +83,11 @@ class _PageParser(HTMLParser):
             self._skip -= 1
         elif tag == "title":
             self._in_title = False
+        elif tag in ("h1", "h2", "h3", "h4", "dt") and self._heading is not None:
+            head = " ".join(self._heading).strip()
+            self._heading = None
+            if head:
+                self.sections.append({"heading": head[:160], "text": []})
 
     def handle_data(self, data):
         t = " ".join(data.split())
@@ -84,8 +95,13 @@ class _PageParser(HTMLParser):
             return
         if self._in_title:
             self.title += t
+        elif self._heading is not None:
+            self._heading.append(t)
+            self.text.append(t)
         else:
             self.text.append(t)
+            if self.sections:
+                self.sections[-1]["text"].append(t)
 
 
 def _get(url: str, timeout: float = 10.0) -> tuple[bytes, str]:
@@ -124,7 +140,9 @@ def fetch_source(url: str, timeout: float = 10.0) -> dict[str, Any]:
         info["images"].append(im)
     info.update(ok=True, title=(p.meta.get("og:title") or p.title).strip()[:200],
                 description=(p.meta.get("og:description") or p.meta.get("description") or "").strip()[:400],
-                text=" ".join(p.text)[:20000])
+                text=" ".join(p.text)[:20000],
+                sections=[{"heading": sec["heading"], "text": re.sub(r"\s*\n\s*", "\n", " ".join(sec["text"])).strip()[:2000]}
+                          for sec in p.sections[:120]])
     info["images"] = info["images"][:60]
     return info
 
@@ -137,7 +155,7 @@ def load_sources(pdir: Path, links: list[str], refresh: bool = False) -> list[di
     out = []
     for url in links:
         rec = cache.get(url)
-        if refresh or not rec or not rec.get("ok"):
+        if refresh or not rec or not rec.get("ok") or "sections" not in rec:  # bản cache cũ chưa chia mục => đọc lại
             rec = fetch_source(url)
             cache[url] = rec
         out.append(rec)
@@ -184,27 +202,6 @@ def images_for_item(name: str, idx0: int, n_items: int, sources: list[dict[str, 
             seen.add(x["url"])
             uniq.append(x)
     return uniq[:limit]
-
-
-def info_for_item(name: str, sources: list[dict[str, Any]], max_items: int = 3, max_len: int = 160) -> list[dict[str, str]]:
-    """Câu thông tin có nhắc tới tên mục (để sếp xem/chèn làm mô tả)."""
-    out: list[dict[str, str]] = []
-    n = norm(name)
-    for s in sources:
-        if not s.get("ok") or not n:
-            continue
-        if match_score(name, s.get("title", "")) >= 0.99 and s.get("description"):
-            out.append({"text": s["description"][:max_len], "source": s["url"]})
-        for sent in re.split(r"(?<=[\.\!\?])\s+|\s[•|]\s", s.get("text", "")):
-            if 20 <= len(sent) <= 400 and f" {n} " in f" {norm(sent)} ":
-                out.append({"text": sent.strip()[:max_len], "source": s["url"]})
-    uniq, seen = [], set()
-    for x in out:
-        k = norm(x["text"])
-        if k not in seen:
-            seen.add(k)
-            uniq.append(x)
-    return uniq[:max_items]
 
 
 def download_image(url: str, out_path: Path, min_side: int = 300) -> Path | None:
