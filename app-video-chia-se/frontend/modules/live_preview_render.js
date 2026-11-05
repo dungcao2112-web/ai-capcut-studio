@@ -8,15 +8,14 @@
   const BODY_FONT = "'Barlow Condensed', 'Be Vietnam Pro', sans-serif";
   const imgCache = new Map();
 
-  function loadImage(url, onReady) {
+  function loadImage(url, onReady) { // cache ảnh + vẽ lại khi tải xong
     if (!url) return null;
     let rec = imgCache.get(url);
     if (!rec) {
-      const im = new Image();
-      rec = { im, ok: false, waiters: [] };
-      im.onload = () => { rec.ok = true; rec.waiters.splice(0).forEach((f) => f()); };
-      im.onerror = () => { rec.failed = true; };
-      im.src = url;
+      rec = { im: new Image(), ok: false, waiters: [] };
+      rec.im.onload = () => { rec.ok = true; rec.waiters.splice(0).forEach((f) => f()); };
+      rec.im.onerror = () => { rec.failed = true; };
+      rec.im.src = url;
       imgCache.set(url, rec);
     }
     if (!rec.ok && onReady && !rec.failed) rec.waiters.push(onReady);
@@ -64,27 +63,22 @@
   }
 
   function drawStrokedLines(ctx, lines, size, cx, y, fill, stroke, strokeW, lineH) {
-    ctx.textAlign = "center";
-    ctx.textBaseline = "top";
-    ctx.lineJoin = "round";
+    ctx.textAlign = "center"; ctx.textBaseline = "top"; ctx.lineJoin = "round";
     lines.forEach((ln, k) => {
       const yy = y + k * size * lineH;
       if (strokeW > 0) { ctx.strokeStyle = stroke; ctx.lineWidth = strokeW; ctx.strokeText(ln, cx, yy); }
-      ctx.fillStyle = fill;
-      ctx.fillText(ln, cx, yy);
+      ctx.fillStyle = fill; ctx.fillText(ln, cx, yy);
     });
     return y + lines.length * size * lineH;
   }
 
-  function isDark(style) { return style.bgTheme === "dark"; }
-
+  const isDark = (style) => style.bgTheme === "dark";
   function drawBackground(ctx, H, style) {
     const base = style.bgColor || "#F6EFE6";
     const g = ctx.createRadialGradient(W / 2, H * 0.35, 40, W / 2, H * 0.35, H * 0.85);
     if (isDark(style)) { g.addColorStop(0, "#1E293B"); g.addColorStop(1, base); }
     else { g.addColorStop(0, "#FFFDF9"); g.addColorStop(0.58, base); g.addColorStop(1, shade(base, -0.08)); }
-    ctx.fillStyle = g;
-    ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
   }
 
   function shade(hex, amt) {
@@ -107,8 +101,7 @@
       ctx.font = `700 ${sfit.size}px ${BODY_FONT}`;
       const tw = ctx.measureText(sfit.lines[0]).width + 56;
       roundRect(ctx, W / 2 - tw / 2, y + 14, tw, sfit.size + 22, 999);
-      ctx.fillStyle = dark ? "rgba(0,0,0,0.45)" : "rgba(74,44,29,0.10)";
-      ctx.fill();
+      ctx.fillStyle = dark ? "rgba(0,0,0,0.45)" : "rgba(74,44,29,0.10)"; ctx.fill();
       drawStrokedLines(ctx, sfit.lines, sfit.size, W / 2, y + 25, dark ? "#FDE68A" : "#5C3724", "#000", 0, 1);
       y += sfit.size + 40;
     }
@@ -128,8 +121,7 @@
       roundRect(ctx, left, y, tw, th, single ? 999 : 24);
       ctx.fillStyle = dark ? "rgba(15,23,42,0.78)" : "rgba(255,252,245,0.97)";
       ctx.shadowColor = dark ? "rgba(0,0,0,0.45)" : "rgba(110,82,55,0.16)";
-      ctx.shadowBlur = 18; ctx.shadowOffsetY = 6;
-      ctx.fill();
+      ctx.shadowBlur = 18; ctx.shadowOffsetY = 6; ctx.fill();
       ctx.shadowColor = "transparent"; ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
       ctx.lineWidth = 3; ctx.strokeStyle = dark ? "rgba(255,255,255,0.22)" : "#DECBB1"; ctx.stroke();
       drawStrokedLines(ctx, fit.lines, fit.size, left + tw / 2, y + 13, dark ? "#F8FAFC" : "#3B281E", "#000", 0, 1.22);
@@ -139,8 +131,7 @@
   }
 
   function drawImageContain(ctx, im, x, y, w, h) {
-    const sc = Math.min(w / im.width, h / im.height);
-    const dw = im.width * sc, dh = im.height * sc;
+    const sc = Math.min(w / im.width, h / im.height), dw = im.width * sc, dh = im.height * sc;
     ctx.drawImage(im, x + (w - dw) / 2, y + (h - dh) / 2, dw, dh);
   }
 
@@ -156,8 +147,7 @@
     roundRect(ctx, cx, top, cardW, cardH, 44);
     ctx.fillStyle = style.cardColor || "#FFFDF9";
     ctx.shadowColor = isDark(style) ? "rgba(0,0,0,0.5)" : "rgba(110,82,55,0.20)";
-    ctx.shadowBlur = 34; ctx.shadowOffsetY = 12;
-    ctx.fill();
+    ctx.shadowBlur = 34; ctx.shadowOffsetY = 12; ctx.fill();
     ctx.shadowColor = "transparent"; ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
     ctx.lineWidth = style.doctorCardFrame ? 8 : 4;
     ctx.strokeStyle = style.doctorCardFrame ? (style.accent || "#1C64B8") : (isDark(style) ? "#334155" : "#E6D8C5");

@@ -99,3 +99,32 @@ app-video-chia-se/
   - Tự động co giãn cỡ chữ thông minh (Auto-Fit Text Scaling) khi tên bệnh viện/bác sĩ hoặc địa chỉ quá dài, đảm bảo không bao giờ bị cắt chữ hay lệch lề.
   - Căn giữa tuyệt đối (`justifyContent: 'center'`, `textAlign: 'center'`) các thẻ thông tin phụ/địa chỉ trong chế độ `chia_se`.
 - Viết bộ kiểm thử tự động `tests/test_app_comprehensive.py` kiểm tra toàn bộ luồng phân tích kịch bản (6 kênh bác sĩ, 7 bệnh viện đi sinh, 3 đồ xài cho bé), API server, tách nền ảnh và QA Validator.
+
+---
+
+## 4. Trạng Thái Triển Khai (Claude Cloud — đã hoàn thành 5 hạng mục)
+
+| Hạng mục | File chính | Ghi chú |
+|---|---|---|
+| Nền tảng Cloud | `backend/services/cloud_env.py`, `demo_seed.py`, `api_routes.py`, `project_meta.py` | Fallback đường dẫn Windows → Linux; `save_config` luôn khôi phục đường dẫn Windows gốc |
+| 1. Studio Pro | `frontend/styles/studio_pro.css`, `modules/theme_adapter.js`, `ui_enhancements.js`, `project_browser.js` | Theme lưu ở `localStorage["vdcs.studio.theme"]` |
+| 2. Live Preview | `modules/live_preview_render.js`, `live_preview_9x16.js` | Khung 9:16 hoặc 1:1 (khung Remotion hiện tại là 1080×1080) |
+| 3. Kịch bản Pro | `modules/script_inspector_pro.js`, `visual_prompt_chips.js`, `backend/services/visual_prompt.py` | Từ khoá JS & Python phải giữ đồng bộ |
+| 4. Ảnh Pro | `backend/services/image_enhancer.py`, `subject_fallback.py`, `image_batch.py`, `modules/doctor_editor_pro.js` | Có u2net + OpenCV thì dùng; thiếu thì tự dùng bộ dự phòng |
+| 5. Auto-QA & Remotion | `backend/services/qa_validator.py`, `qa_autofix.py`, `modules/qa_panel.js`, `remotion/ConvoAppDynamic.tsx` | `remotion_templates.py` đọc TSX từ `remotion/ConvoAppDynamic.tsx` |
+
+**API mới** (chỉ thêm, route cũ giữ nguyên): `GET /api/system/environment` · `POST /api/script/analyze` · `POST /api/demo/seed` ·
+`GET /api/projects/<pid>/qa-check` · `POST /api/projects/<pid>/qa-autofix` · `GET|POST /api/projects/<pid>/visual-prompt` ·
+`GET /api/projects/<pid>/preview-data` · `POST /api/projects/<pid>/enhance-doctor-image` · `POST /api/projects/<pid>/batch-process-images`.
+Route cũ `upload-doctor-image` / `edit-doctor-image` nhận thêm tuỳ chọn `enhance`, `enhance_strength`, `warm_tone`, `card_bg`, `card_radius` (không gửi = hành vi cũ).
+
+**Chạy & kiểm thử trên Cloud:**
+```bash
+python3 desktop_app.py --server --port 8765   # tự tạo 2 dự án mẫu khi chạy trên Linux
+python3 -m pytest tests/ -q                    # 39 test, dùng thư mục dự án tạm (không đụng projects/)
+```
+
+**Quy tắc khi sửa tiếp:**
+- Sửa `remotion/ConvoAppDynamic.tsx` xong phải đồng bộ lại hằng `CONVO_APP_DYNAMIC_TSX` trong `remotion_templates.py` (test `test_remotion_embedded_template_in_sync_with_file` sẽ báo nếu quên).
+- Biến `currentProjectId` / `currentProject` trong `app.js` là `let` (không nằm trên `window`) — module mới đọc qua `window.studioCurrent()`.
+- Module mới giữ ≤ 260 dòng (có test kiểm tra).

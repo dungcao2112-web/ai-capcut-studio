@@ -136,9 +136,13 @@ def run_qa_check(pdir: Path) -> dict[str, Any]:
     if preset == "anh_nhac" and outline.get("entries"):
         heads = [_norm(e["heading"]) for e in outline["entries"]]
         bad = [str(k + 1) for k, (a, b) in enumerate(zip(heads, names)) if a != b]
-        st = "pass" if not bad and len(heads) == len(names) else "fail"
-        checks.append(_check("names_match", "Tên mục trong bảng khớp kịch bản", st,
-                             "Khớp 100%." if st == "pass" else f"Lệch ở mục: {', '.join(bad) or 'số lượng'}", True))
+        clean = lambda xs: [str(x).strip() for x in (xs or []) if str(x).strip()]  # noqa: E731
+        bul_bad = [str(k + 1) for k, (e, it) in enumerate(zip(outline["entries"], items))
+                   if clean(e.get("bullets")) and clean(e.get("bullets")) != clean(it.get("bullets"))]
+        st = "fail" if bad or len(heads) != len(names) else ("warn" if bul_bad else "pass")
+        detail = "Khớp 100% (tên & mô tả)." if st == "pass" else (
+            f"Lệch tên ở mục: {', '.join(bad) or 'số lượng'}" if st == "fail" else f"Mô tả/địa chỉ lệch kịch bản ở mục: {', '.join(bul_bad)}")
+        checks.append(_check("names_match", "Tên mục & mô tả trong bảng khớp kịch bản", st, detail, True))
     else:
         checks.append(_check("names_match", "Tên mục trong bảng khớp kịch bản", "pass", "Preset dùng bảng sản phẩm làm chuẩn."))
 
@@ -161,7 +165,7 @@ def run_qa_check(pdir: Path) -> dict[str, Any]:
         elif min(info[0], info[1]) < MIN_IMAGE_SIDE:
             low_res.append(f"{i_num} ({info[0]}×{info[1]})")
     checks.append(_check("images_present", "Mọi mục đều có file ảnh", "pass" if not no_img else "fail",
-                         "Đủ ảnh." if not no_img else f"Thiếu ảnh mục: {', '.join(no_img)}", bool(no_img)))
+                         "Đủ ảnh." if not no_img else f"Thiếu ảnh mục: {', '.join(no_img)} — cần tải ảnh / tự tìm ảnh"))
     checks.append(_check("image_quality", f"Ảnh hợp lệ, cạnh ngắn ≥ {MIN_IMAGE_SIDE}px, không rỗng",
                          "fail" if blank else ("warn" if low_res else "pass"),
                          "; ".join(x for x in (f"Ảnh rỗng/lỗi: {', '.join(blank)}" if blank else "",

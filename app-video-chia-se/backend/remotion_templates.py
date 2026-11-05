@@ -69,6 +69,42 @@ const loadSelectedFont = (fontKey: string | undefined, fallbackKey = "Anton"): s
 };
 
 const activeCfg = (activeData.config || {}) as Record<string, any>;
+
+// Tự động co chữ thông minh (Auto-Fit Text Scaling): ước lượng bề rộng theo số ký tự & hệ số font,
+// giảm cỡ chữ để vừa maxWidthPx trong tối đa maxLines dòng => không bao giờ cắt chữ hay lệch lề.
+export const autoFitFontSize = (
+  text: string,
+  baseSize: number,
+  maxWidthPx: number,
+  opts: { minSize?: number; maxLines?: number; charWidthEm?: number } = {}
+): number => {
+  const clean = String(text || "").trim();
+  if (!clean) return baseSize;
+  const minSize = opts.minSize ?? Math.round(baseSize * 0.55);
+  const maxLines = Math.max(1, opts.maxLines ?? 1);
+  const charW = opts.charWidthEm ?? 0.5;
+  const longestWord = clean.split(/\s+/).reduce((m, w) => Math.max(m, Array.from(w).length), 0);
+  const byWidth = (maxWidthPx * maxLines) / Math.max(1, Array.from(clean).length * charW * 1.08);
+  const byWord = maxWidthPx / Math.max(1, longestWord * charW);
+  return Math.round(Math.max(minSize, Math.min(baseSize, byWidth, byWord)));
+};
+const AUTO_FIT_ON = activeCfg.autoFitText !== false;
+const fitFont = (text: string, base: number, maxW: number, opts?: Parameters<typeof autoFitFontSize>[3]) =>
+  AUTO_FIT_ON ? autoFitFontSize(text, base, maxW, opts) : base;
+// Căn giữa tuyệt đối các pill thông tin / địa chỉ (mặc định bật theo yêu cầu thiết kế)
+const CENTER_INFO = activeCfg.centerInfoPills !== false;
+// Ước lượng mép dưới khối tiêu đề (tiêu đề dài 2–3 dòng) để thẻ ảnh không bao giờ đè lên tiêu đề
+const estimateTitleBottom = (): number => {
+  const size = Number(activeCfg.titleFontSize || 75);
+  const hasSub = Boolean((activeData as any).subtitle);
+  const baseTop = Number(activeCfg.titleTop ?? 110);
+  const top = hasSub ? Math.max(58, baseTop - 28) : baseTop;
+  const chars = Array.from(String((activeData as any).title || "")).length;
+  const lines = Math.max(1, Math.min(3, Math.ceil((chars * size * 0.42) / 1000)));
+  return top + lines * size * 1.05 + (hasSub ? 8 + 30 * 1.3 + 8 : 0);
+};
+const estLines = (text: string, fontSize: number, maxW: number, maxLines: number, charW = 0.46) =>
+  Math.max(1, Math.min(maxLines, Math.ceil((Array.from(String(text || "")).length * fontSize * charW) / maxW)));
 const titleFontFamily = loadSelectedFont(activeCfg.titleFont, "Anton");
 const subFontFamily = loadSelectedFont(activeCfg.subFont, "Anton");
 const antonFont = subFontFamily;
@@ -346,7 +382,7 @@ const ChiaSeNotes: React.FC<{ marks: Record<string, number>; rows: string[] }> =
               justifyContent: "center",
               padding: "0 2px",
               color: "#000",
-              fontSize: 38,
+              fontSize: fitFont(label, 38, 596, { minSize: 22, charWidthEm: 0.48 }),
               letterSpacing: 0,
               whiteSpace: "nowrap",
               textAlign: "center",
@@ -470,13 +506,40 @@ const GioDoItemCard: React.FC<{
     const isLightBg = Boolean(
       cfg.backgroundColor || bgTheme === "beige" || bgTheme === "light" || bgTheme !== "dark"
     );
+    const heroScale = Math.max(0.8, Math.min(1.5, Number(cfg.heroImageScale) || 1));
     const heroImgPx = Math.round(
-      bullets.length >= 2
-        ? Math.min(720, Math.max(520, prodImgSize * 1.35))
-        : Math.min(880, Math.max(560, prodImgSize * 1.48))
+      Math.min(
+        960,
+        heroScale *
+          (bullets.length >= 2
+            ? Math.min(720, Math.max(520, prodImgSize * 1.35))
+            : Math.min(880, Math.max(560, prodImgSize * 1.48)))
+      )
     );
-    const heroBoxH = Math.round(heroImgPx * 0.72);
-    const effTop = Number(cfg.productCardTop || (bullets.length >= 2 ? 172 : hasBullets ? 176 : 185));
+    const nameText = `${item.i}. ${fullLabel}`;
+    const nameBase = bullets.length >= 2 ? Math.min(62, Math.max(prodNameFontSize, 56)) : Math.max(prodNameFontSize, 66);
+    const nameColor = String(cfg.itemNameColor || (isLightBg ? "#C91C32" : "#FFD54F"));
+    const nameStroke = cfg.nameStrokeBold ? 7 : 4;
+    const accent = String(cfg.accentColor || "#1C64B8");
+    // Chừa chỗ cho tên mục + pill địa chỉ + tiêu đề => ảnh lớn không bao giờ đè chữ / tràn khung
+    // productCardTop mặc định của form (610) là cho bố cục Giỏ đồ có 2 người — với bố cục ảnh lớn chỉ dùng khi < 420px
+    const manualTop = Number(cfg.productCardTop) > 0 && Number(cfg.productCardTop) < 420 ? Number(cfg.productCardTop) : 0;
+    const baseTop = manualTop || (bullets.length >= 2 ? 172 : hasBullets ? 176 : 185);
+    const effTop = manualTop ? baseTop : Math.max(baseTop, Math.round(estimateTitleBottom() + 14));
+    const nameFS = fitFont(nameText, nameBase, 912, { maxLines: 2, minSize: 38, charWidthEm: 0.46 });
+    const pillFS = isSingleBullet ? fitFont(`📍 ${bullets[0]}`, 33, 884, { maxLines: 2, minSize: 22, charWidthEm: 0.46 }) : 0;
+    const bulletFS = (b: string) => fitFont(`• ${b}`, bullets.length >= 3 ? 29 : 32, 872, { maxLines: 2, minSize: 20, charWidthEm: 0.46 });
+    const textBlockH =
+      (bullets.length >= 2 ? 18 : 28) +
+      estLines(nameText, nameFS, 912, 2) * nameFS * 1.06 +
+      (!hasBullets
+        ? 0
+        : isSingleBullet
+        ? 18 + estLines(bullets[0], pillFS, 884, 2) * pillFS * 1.22 + 30
+        : 10 + 34 + bullets.reduce((acc, b) => acc + estLines(b, bulletFS(b), 872, 2) * bulletFS(b) * 1.25 + 6, 0));
+    const maxBoxH = 1080 - 24 - effTop - textBlockH - 8;
+    const heroFitPx = Math.max(300, Math.min(heroImgPx, Math.floor(maxBoxH / 0.72)));
+    const heroBoxH = Math.round(heroFitPx * 0.72);
     return (
       <div
         style={{
@@ -501,19 +564,48 @@ const GioDoItemCard: React.FC<{
         {hasImg ? (
           <div
             style={{
-              width: heroImgPx,
+              width: heroFitPx,
               height: heroBoxH,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
               flexShrink: 0,
+              position: "relative",
+              ...(cfg.doctorCardFrame
+                ? {
+                    background: String(cfg.cardColor || "#FFFDF9"),
+                    border: `6px solid ${accent}`,
+                    borderRadius: 40,
+                    boxShadow: "0 18px 40px rgba(28, 100, 184, 0.18)",
+                    overflow: "hidden",
+                  }
+                : {}),
             }}
           >
+            {cfg.doctorCardFrame ? (
+              <div
+                style={{
+                  position: "absolute",
+                  top: 16,
+                  left: 20,
+                  zIndex: 2,
+                  padding: "6px 18px",
+                  borderRadius: 999,
+                  background: accent,
+                  color: "#fff",
+                  fontFamily: barlowFont,
+                  fontWeight: 700,
+                  fontSize: 30,
+                }}
+              >
+                ✚ BÁC SĨ
+              </div>
+            ) : null}
             <Img
               src={staticFile(`${mediaDir}/products/${item.image_file}`)}
               style={{
-                width: heroImgPx,
-                height: heroImgPx,
+                width: cfg.doctorCardFrame ? heroFitPx - 24 : heroFitPx,
+                height: cfg.doctorCardFrame ? heroBoxH - 24 : heroFitPx,
                 maxWidth: "none",
                 maxHeight: "none",
                 objectFit: "contain",
@@ -531,16 +623,16 @@ const GioDoItemCard: React.FC<{
             padding: "2px 24px",
             textAlign: "center",
             fontFamily: barlowFont,
-            color: isLightBg ? "#C91C32" : "#FFD54F",
-            fontSize: bullets.length >= 2 ? Math.min(62, Math.max(prodNameFontSize, 56)) : Math.max(prodNameFontSize, 66),
+            color: nameColor,
+            fontSize: nameFS,
             lineHeight: 1.06,
             fontWeight: 700,
-            WebkitTextStroke: isLightBg ? "4px #fff" : "4px #000",
+            WebkitTextStroke: isLightBg ? `${nameStroke}px #fff` : `${nameStroke}px #000`,
             paintOrder: "stroke fill",
             textShadow: isLightBg ? "0 4px 12px rgba(0,0,0,.18)" : "0 6px 16px rgba(0,0,0,.85)",
           }}
         >
-          {`${item.i}. ${fullLabel}`}
+          {nameText}
         </div>
         {hasBullets ? (
           isSingleBullet ? (
@@ -562,7 +654,7 @@ const GioDoItemCard: React.FC<{
               <div
                 style={{
                   fontFamily: barlowFont,
-                  fontSize: 33,
+                  fontSize: pillFS,
                   lineHeight: 1.22,
                   color: isLightBg ? "#3b281e" : "#f8fafc",
                   WebkitTextStroke: isLightBg ? "0px transparent" : "1.5px #000",
@@ -587,7 +679,9 @@ const GioDoItemCard: React.FC<{
                 boxShadow: isLightBg ? "0 8px 24px rgba(110, 82, 55, 0.16)" : "0 12px 30px rgba(0,0,0,0.45)",
                 display: "flex",
                 flexDirection: "column",
-                alignItems: "flex-start",
+                alignItems: CENTER_INFO ? "center" : "flex-start",
+                justifyContent: "center",
+                textAlign: CENTER_INFO ? "center" : "left",
                 gap: 6,
               }}
             >
@@ -596,12 +690,12 @@ const GioDoItemCard: React.FC<{
                   key={bi}
                   style={{
                     fontFamily: barlowFont,
-                    fontSize: bullets.length >= 3 ? 29 : 32,
+                    fontSize: bulletFS(b),
                     lineHeight: 1.25,
                     color: isLightBg ? "#3b281e" : "#f8fafc",
                     WebkitTextStroke: isLightBg ? "0px transparent" : "1.5px #000",
                     paintOrder: "stroke fill",
-                    textAlign: "left",
+                    textAlign: CENTER_INFO ? "center" : "left",
                   }}
                 >
                   {`• ${b}`}
@@ -871,6 +965,7 @@ const GioDoSummaryRow: React.FC<{
   const name = (item.name_and_qty || `${baseName} ${qtyText}`).toLocaleUpperCase("vi");
   const hidePrice = Boolean((activeData.config as any)?.preset === "anh_nhac" || item.no_price);
   const bullets = Array.isArray(item.bullets) ? item.bullets.filter(Boolean) : [];
+  const sumScale = (activeData.config as any)?.summaryLargeText ? 1.15 : 1;
 
   if (singleCol) {
     const rowHeight = rowsPerCol <= 3 ? 190 : Math.floor(600 / rowsPerCol);
@@ -928,7 +1023,7 @@ const GioDoSummaryRow: React.FC<{
             style={{
               color: "#c92a42",
               fontFamily: barlowFont,
-              fontSize: 34,
+              fontSize: fitFont(`${item.i}. ${name}`, Math.round(34 * sumScale), 936 - 28 - thumbW - 20, { maxLines: 2, minSize: 22, charWidthEm: 0.46 }),
               lineHeight: 1.1,
               fontWeight: 800,
             }}
@@ -941,7 +1036,7 @@ const GioDoSummaryRow: React.FC<{
               style={{
                 color: "#383238",
                 fontFamily: barlowFont,
-                fontSize: 22,
+                fontSize: fitFont(`• ${b}`, Math.round(22 * sumScale), 936 - 28 - thumbW - 20, { maxLines: 2, minSize: 16, charWidthEm: 0.46 }),
                 lineHeight: 1.24,
                 fontWeight: 700,
               }}
@@ -1011,7 +1106,12 @@ const GioDoSummaryRow: React.FC<{
           style={{
             color: "#383238",
             fontFamily: barlowFont,
-            fontSize: hidePrice ? (rowsPerCol <= 5 ? (bullets.length ? 25 : 27) : 23) : 21,
+            fontSize: fitFont(
+              hidePrice ? `${item.i}. ${name}` : name,
+              Math.round((hidePrice ? (rowsPerCol <= 5 ? (bullets.length ? 25 : 27) : 23) : 21) * sumScale),
+              460 - 16 - thumbW - (hidePrice ? 20 : 91),
+              { maxLines: 2, minSize: 15, charWidthEm: 0.46 }
+            ),
             lineHeight: 1.12,
             fontWeight: 700,
           }}
@@ -1089,7 +1189,9 @@ const GioDoSummary: React.FC<{
     ? effNote.trim()
     : `(${effNote.trim()})`;
   const effTotalText = (activeData.config as any)?.totalTextOverride
-    || (isAnhNhac ? `TOP ${items.length} ${title}` : `TỔNG ${totalPriceStr}`);
+    || (isAnhNhac
+      ? `TOP ${items.length} ${String(title || "").replace(/^\s*(?:TOP\s+)?\d+\s+/i, "")}`
+      : `TỔNG ${totalPriceStr}`);
   const effSubtitle = topSubtitle
     ? topSubtitle.toLocaleUpperCase("vi")
     : isAnhNhac && (!summarySubtitle || summarySubtitle === "ĐỦ CHO MẸ & BÉ ĐI SINH")
@@ -1133,7 +1235,7 @@ const GioDoSummary: React.FC<{
       >
         <div
           style={{
-            fontSize: 54,
+            fontSize: fitFont(String(title || ""), 54, 940, { maxLines: 2, minSize: 34, charWidthEm: 0.5 }),
             lineHeight: 1.08,
             fontWeight: 700,
             letterSpacing: 1,
@@ -1339,7 +1441,9 @@ export const ConvoAppDynamic: React.FC = () => {
     sfx("02_soft_pop.wav", summaryStart + i * 4, `summary-pop-${i}`, 0.12)
   );
 
-  const customBg = String((cfg as any).backgroundColor || "").trim();
+  const customBg = String(
+    (cfg as any).backgroundColor || ((cfg as any).bgTheme !== "dark" ? (cfg as any).customBgColor : "") || ""
+  ).trim();
   const isBeigeTheme = (cfg as any).bgTheme !== "dark";
   const mainBg = customBg
     ? customBg
@@ -1471,6 +1575,19 @@ export const ConvoAppDynamic: React.FC = () => {
 '''
 
 
+_TSX_SOURCE_FILE = Path(__file__).resolve().parents[1] / "remotion" / "ConvoAppDynamic.tsx"
+
+
+def get_convo_app_tsx() -> str:
+    """Nguồn TSX duy nhất: remotion/ConvoAppDynamic.tsx (nếu có), dự phòng bằng bản nhúng ở trên."""
+    try:
+        if _TSX_SOURCE_FILE.is_file():
+            return _TSX_SOURCE_FILE.read_text(encoding="utf-8")
+    except OSError:
+        pass
+    return CONVO_APP_DYNAMIC_TSX
+
+
 def ensure_remotion_dynamic_composition(
     remotion_dir: Path,
     active_payload: dict[str, Any],
@@ -1482,7 +1599,7 @@ def ensure_remotion_dynamic_composition(
     root_tsx_path = src_dir / "Root.tsx"
 
     write_json(active_json_path, active_payload)
-    write_text(comp_tsx_path, CONVO_APP_DYNAMIC_TSX)
+    write_text(comp_tsx_path, get_convo_app_tsx())
 
     root_text = root_tsx_path.read_text(encoding="utf-8")
     if "ConvoAppDynamic" not in root_text:

@@ -76,7 +76,7 @@ def apply_autofix(pid: str, pdir: Path, before: dict[str, Any], rerun_steps: boo
     # 1) Đồng bộ bang.json theo kịch bản (chỉ preset Ảnh + Nhạc: kịch bản = danh sách mục)
     if preset == "anh_nhac" and outline.get("count"):
         need = any(_status(before, c) != "pass" for c in ("count_consistency", "names_match", "index_sequence"))
-        if need and (len(bang.get("items") or []) != outline["count"] or _status(before, "names_match") == "fail"
+        if need and (len(bang.get("items") or []) != outline["count"] or _status(before, "names_match") != "pass"
                      or _status(before, "index_sequence") != "pass"):
             bang = _rebuild_bang_from_outline(bang, outline, preset)
             bang_changed = True
